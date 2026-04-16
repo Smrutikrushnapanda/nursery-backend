@@ -100,6 +100,8 @@ async function bootstrap() {
         process.env.SWAGGER_DESCRIPTION ?? 'Nursery backend API documentation',
       )
       .setVersion(process.env.SWAGGER_VERSION ?? '1.0.0')
+      .addBearerAuth()
+      .addTag('Categories', 'Category management endpoints')
       .build();
 
     const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);

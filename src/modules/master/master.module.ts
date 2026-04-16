@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { MasterService } from './master.service';
 import { MasterController } from './master.controller';
 import { BusinessType } from './business-type.entity';
-import { Category } from './category.entity';
+import { Category } from '../categories/category.entity';
 import { SubCategory } from './subcategory.entity';
 import { MenuMaster } from './menu-master.entity';
 

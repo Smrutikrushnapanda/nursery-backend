@@ -2,7 +2,7 @@ import { Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusinessType } from './business-type.entity';
-import { Category } from './category.entity';
+import { Category } from '../categories/category.entity';
 import { SubCategory } from './subcategory.entity';
 import { MenuMaster } from './menu-master.entity';
 import { CreateMenuMasterDto } from './dto/create-menu-master.dto';
