@@ -5,9 +5,10 @@ import { MasterController } from './master.controller';
 import { BusinessType } from './business-type.entity';
 import { Category } from './category.entity';
 import { SubCategory } from './subcategory.entity';
+import { MenuMaster } from './menu-master.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([BusinessType, Category, SubCategory])],
+  imports: [TypeOrmModule.forFeature([BusinessType, Category, SubCategory, MenuMaster])],
   providers: [MasterService],
   controllers: [MasterController],
   exports: [MasterService],

@@ -1,9 +1,12 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusinessType } from './business-type.entity';
 import { Category } from './category.entity';
 import { SubCategory } from './subcategory.entity';
+import { MenuMaster } from './menu-master.entity';
+import { CreateMenuMasterDto } from './dto/create-menu-master.dto';
+import { UpdateMenuMasterDto } from './dto/update-menu-master.dto';
 
 @Injectable()
 export class MasterService implements OnModuleInit {
@@ -14,6 +17,8 @@ export class MasterService implements OnModuleInit {
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(SubCategory)
     private readonly subCategoryRepository: Repository<SubCategory>,
+    @InjectRepository(MenuMaster)
+    private readonly menuMasterRepository: Repository<MenuMaster>,
   ) {}
 
   async onModuleInit() {
@@ -84,5 +89,42 @@ export class MasterService implements OnModuleInit {
     return this.subCategoryRepository.find({
       order: { id: 'ASC' },
     });
+  }
+
+  // Menu Master CRUD operations
+  async createMenuMaster(createMenuMasterDto: CreateMenuMasterDto): Promise<MenuMaster> {
+    const menuMaster = this.menuMasterRepository.create(createMenuMasterDto);
+    return this.menuMasterRepository.save(menuMaster);
+  }
+
+  async getAllMenuMasters(): Promise<MenuMaster[]> {
+    return this.menuMasterRepository.find({
+      order: { displayOrder: 'ASC' },
+    });
+  }
+
+  async getMenuMasterById(id: number): Promise<MenuMaster> {
+    const menuMaster = await this.menuMasterRepository.findOne({ where: { id } });
+    if (!menuMaster) {
+      throw new NotFoundException(`MenuMaster with ID ${id} not found`);
+    }
+    return menuMaster;
+  }
+
+  async updateMenuMaster(
+    id: number,
+    updateMenuMasterDto: UpdateMenuMasterDto,
+  ): Promise<MenuMaster> {
+    const menuMaster = await this.getMenuMasterById(id);
+    const updatedMenuMaster = this.menuMasterRepository.merge(
+      menuMaster,
+      updateMenuMasterDto,
+    );
+    return this.menuMasterRepository.save(updatedMenuMaster);
+  }
+
+  async deleteMenuMaster(id: number): Promise<void> {
+    const menuMaster = await this.getMenuMasterById(id);
+    await this.menuMasterRepository.remove(menuMaster);
   }
 }
