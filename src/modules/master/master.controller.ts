@@ -19,41 +19,20 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { MasterService } from './master.service';
-import { CreateMenuMasterDto } from './dto/create-menu-master.dto';
-import { UpdateMenuMasterDto } from './dto/update-menu-master.dto';
-import { MenuMaster } from './menu-master.entity';
+import { CreateSubCategoryDto } from './dto/create-subcategory.dto';
+import { UpdateSubCategoryDto } from './dto/update-subcategory.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 
-@ApiTags('Master')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@ApiTags('Master - Categories & Subcategories')
 @Controller('master')
 export class MasterController {
   constructor(private readonly masterService: MasterService) {}
 
-  @Get('business-types')
-  @ApiOperation({ summary: 'Get all business types' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns all business types',
-  })
-  async getBusinessTypes() {
-    return this.masterService.getBusinessTypes();
-  }
-
-  @Get('categories')
-  @ApiOperation({ summary: 'Get all categories' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns all categories',
-  })
-  async getCategories(@CurrentOrganization() orgId: string) {
-    return this.masterService.getCategories(orgId);
-  }
-
-  @Get('subcategories')
-  @ApiOperation({ summary: 'Get all subcategories' })
+  @Get('dashboard/subcategories')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get subcategories (Dashboard)', description: 'Dashboard flow endpoint. Retrieve subcategories for the organization. Optionally filter by categoryId.' })
   @ApiQuery({
     name: 'categoryId',
     required: false,
@@ -63,105 +42,99 @@ export class MasterController {
     status: 200,
     description: 'Returns all subcategories or filtered by category',
   })
-  async getSubCategories(
-    @CurrentOrganization() orgId: string,
+  async getDashboardSubCategories(
+    @CurrentOrganization() orgId?: string,
     @Query('categoryId') categoryId?: string,
   ) {
     const categoryIdNum = categoryId ? parseInt(categoryId, 10) : undefined;
     return this.masterService.getSubCategories(orgId, categoryIdNum);
   }
 
-  // Menu Master APIs
-  @Post('menus')
-  @ApiOperation({ summary: 'Create a new menu' })
+  @Post('dashboard/subcategories')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Create a new subcategory (Dashboard)' })
   @ApiResponse({
     status: 201,
-    description: 'Menu created successfully',
-    type: MenuMaster,
-  })
-  async createMenuMaster(
-    @Body() createMenuMasterDto: CreateMenuMasterDto,
-    @CurrentOrganization() orgId: string,
-  ): Promise<MenuMaster> {
-    return this.masterService.createMenuMaster(createMenuMasterDto, orgId);
-  }
-
-  @Get('menus')
-  @ApiOperation({ summary: 'Get all menus' })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns all menus',
-    type: [MenuMaster],
-  })
-  async getAllMenuMasters(
-    @CurrentOrganization() orgId: string,
-  ): Promise<MenuMaster[]> {
-    return this.masterService.getAllMenuMasters(orgId);
-  }
-
-  @Get('menus/:id')
-  @ApiOperation({ summary: 'Get a menu by ID' })
-  @ApiParam({
-    name: 'id',
-    description: 'Menu ID',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Returns the menu',
-    type: MenuMaster,
+    description: 'SubCategory created successfully',
   })
   @ApiResponse({
     status: 404,
-    description: 'Menu not found',
+    description: 'Category not found',
   })
-  async getMenuMasterById(
-    @Param('id', ParseIntPipe) id: number,
+  async createSubCategory(
+    @Body() createSubCategoryDto: CreateSubCategoryDto,
     @CurrentOrganization() orgId: string,
-  ): Promise<MenuMaster> {
-    return this.masterService.getMenuMasterById(id, orgId);
+  ) {
+    return this.masterService.createSubCategory(createSubCategoryDto, orgId);
   }
 
-  @Put('menus/:id')
-  @ApiOperation({ summary: 'Update a menu' })
+  @Get('dashboard/subcategories/:id')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get a subcategory by ID (Dashboard)' })
   @ApiParam({
     name: 'id',
-    description: 'Menu ID',
+    description: 'SubCategory ID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Menu updated successfully',
-    type: MenuMaster,
+    description: 'Returns the subcategory',
   })
   @ApiResponse({
     status: 404,
-    description: 'Menu not found',
+    description: 'SubCategory not found',
   })
-  async updateMenuMaster(
+  async getSubCategoryById(
     @Param('id', ParseIntPipe) id: number,
-    @Body() updateMenuMasterDto: UpdateMenuMasterDto,
-    @CurrentOrganization() orgId: string,
-  ): Promise<MenuMaster> {
-    return this.masterService.updateMenuMaster(id, updateMenuMasterDto, orgId);
+    @CurrentOrganization() orgId?: string,
+  ) {
+    return this.masterService.getDashboardSubCategoryById(id, orgId);
   }
 
-  @Delete('menus/:id')
-  @ApiOperation({ summary: 'Delete a menu' })
+  @Put('dashboard/subcategories/:id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Update a subcategory (Dashboard)' })
   @ApiParam({
     name: 'id',
-    description: 'Menu ID',
+    description: 'SubCategory ID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Menu deleted successfully',
+    description: 'SubCategory updated successfully',
   })
   @ApiResponse({
     status: 404,
-    description: 'Menu not found',
+    description: 'SubCategory or Category not found',
   })
-  async deleteMenuMaster(
+  async updateSubCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateSubCategoryDto: UpdateSubCategoryDto,
+    @CurrentOrganization() orgId: string,
+  ) {
+    return this.masterService.updateSubCategory(id, updateSubCategoryDto, orgId);
+  }
+
+  @Delete('dashboard/subcategories/:id')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Delete a subcategory (Dashboard)' })
+  @ApiParam({
+    name: 'id',
+    description: 'SubCategory ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'SubCategory deleted successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'SubCategory not found',
+  })
+  async deleteSubCategory(
     @Param('id', ParseIntPipe) id: number,
     @CurrentOrganization() orgId: string,
-  ): Promise<void> {
-    return this.masterService.deleteMenuMaster(id, orgId);
+  ) {
+    return this.masterService.deleteSubCategory(id, orgId);
   }
 }

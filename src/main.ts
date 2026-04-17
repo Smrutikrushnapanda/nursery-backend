@@ -101,7 +101,6 @@ async function bootstrap() {
       )
       .setVersion(process.env.SWAGGER_VERSION ?? '1.0.0')
       .addBearerAuth()
-      .addTag('Categories', 'Category management endpoints')
       .build();
 
     const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
