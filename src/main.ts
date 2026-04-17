@@ -1,4 +1,5 @@
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -84,6 +85,7 @@ async function bootstrap() {
     origin: parseCorsOrigins(process.env.CORS_ORIGIN),
     credentials: true,
   });
+  app.use(cookieParser());
   app.use(helmet());
   app.useGlobalPipes(
     new ValidationPipe({

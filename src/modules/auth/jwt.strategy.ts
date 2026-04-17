@@ -19,6 +19,12 @@ function extractTokenFromRequest(request: Request): string | null {
     return null;
   }
 
+  // 1. Try cookie first
+  const cookieToken = (request as any).cookies?.access_token;
+  if (typeof cookieToken === 'string' && cookieToken.trim()) {
+    return cookieToken.trim();
+  }
+
   const authorizationHeader = request.headers.authorization;
   if (typeof authorizationHeader === 'string' && authorizationHeader.trim()) {
     const value = authorizationHeader.trim();

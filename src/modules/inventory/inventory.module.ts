@@ -1,7 +1,15 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { PlantVariant } from '../plants/plant-variant.entity';
 import { InventoryController } from './inventory.controller';
+import { PlantStock } from './entities/plant-stock.entity';
+import { StockLog } from './entities/stock-log.entity';
+import { InventoryService } from './inventory.service';
 
 @Module({
-  controllers: [InventoryController]
+  imports: [TypeOrmModule.forFeature([PlantStock, StockLog, PlantVariant])],
+  controllers: [InventoryController],
+  providers: [InventoryService],
+  exports: [InventoryService],
 })
 export class InventoryModule {}

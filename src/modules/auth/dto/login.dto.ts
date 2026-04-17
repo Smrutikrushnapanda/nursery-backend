@@ -8,13 +8,13 @@ import {
 } from 'class-validator';
 
 export class LoginDto {
-  @ApiProperty({ example: 'owner@jagannathnursery.com' })
+  @ApiProperty({ example: 'skpanda017@gmail.com' })
   @IsEmail()
   @IsNotEmpty()
   @MaxLength(191)
   email!: string;
 
-  @ApiProperty({ example: 'Str0ngP@ssw0rd!' })
+  @ApiProperty({ example: 'Smruti@1234' })
   @IsString()
   @IsNotEmpty()
   @MinLength(8)
