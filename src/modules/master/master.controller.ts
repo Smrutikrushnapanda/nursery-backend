@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   ParseIntPipe,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,13 +16,18 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
 import { MasterService } from './master.service';
 import { CreateMenuMasterDto } from './dto/create-menu-master.dto';
 import { UpdateMenuMasterDto } from './dto/update-menu-master.dto';
 import { MenuMaster } from './menu-master.entity';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 
 @ApiTags('Master')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('master')
 export class MasterController {
   constructor(private readonly masterService: MasterService) {}
@@ -42,8 +48,8 @@ export class MasterController {
     status: 200,
     description: 'Returns all categories',
   })
-  async getCategories() {
-    return this.masterService.getCategories();
+  async getCategories(@CurrentOrganization() orgId: string) {
+    return this.masterService.getCategories(orgId);
   }
 
   @Get('subcategories')
@@ -57,9 +63,12 @@ export class MasterController {
     status: 200,
     description: 'Returns all subcategories or filtered by category',
   })
-  async getSubCategories(@Query('categoryId') categoryId?: string) {
+  async getSubCategories(
+    @CurrentOrganization() orgId: string,
+    @Query('categoryId') categoryId?: string,
+  ) {
     const categoryIdNum = categoryId ? parseInt(categoryId, 10) : undefined;
-    return this.masterService.getSubCategories(categoryIdNum);
+    return this.masterService.getSubCategories(orgId, categoryIdNum);
   }
 
   // Menu Master APIs
@@ -72,8 +81,9 @@ export class MasterController {
   })
   async createMenuMaster(
     @Body() createMenuMasterDto: CreateMenuMasterDto,
+    @CurrentOrganization() orgId: string,
   ): Promise<MenuMaster> {
-    return this.masterService.createMenuMaster(createMenuMasterDto);
+    return this.masterService.createMenuMaster(createMenuMasterDto, orgId);
   }
 
   @Get('menus')
@@ -83,8 +93,10 @@ export class MasterController {
     description: 'Returns all menus',
     type: [MenuMaster],
   })
-  async getAllMenuMasters(): Promise<MenuMaster[]> {
-    return this.masterService.getAllMenuMasters();
+  async getAllMenuMasters(
+    @CurrentOrganization() orgId: string,
+  ): Promise<MenuMaster[]> {
+    return this.masterService.getAllMenuMasters(orgId);
   }
 
   @Get('menus/:id')
@@ -104,8 +116,9 @@ export class MasterController {
   })
   async getMenuMasterById(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentOrganization() orgId: string,
   ): Promise<MenuMaster> {
-    return this.masterService.getMenuMasterById(id);
+    return this.masterService.getMenuMasterById(id, orgId);
   }
 
   @Put('menus/:id')
@@ -126,8 +139,9 @@ export class MasterController {
   async updateMenuMaster(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateMenuMasterDto: UpdateMenuMasterDto,
+    @CurrentOrganization() orgId: string,
   ): Promise<MenuMaster> {
-    return this.masterService.updateMenuMaster(id, updateMenuMasterDto);
+    return this.masterService.updateMenuMaster(id, updateMenuMasterDto, orgId);
   }
 
   @Delete('menus/:id')
@@ -144,7 +158,10 @@ export class MasterController {
     status: 404,
     description: 'Menu not found',
   })
-  async deleteMenuMaster(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.masterService.deleteMenuMaster(id);
+  async deleteMenuMaster(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentOrganization() orgId: string,
+  ): Promise<void> {
+    return this.masterService.deleteMenuMaster(id, orgId);
   }
 }

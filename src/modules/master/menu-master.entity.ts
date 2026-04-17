@@ -8,6 +8,7 @@ import {
   OneToMany,
   JoinColumn,
 } from 'typeorm';
+import { Organization } from '../organizations/entities/organization.entity';
 
 @Entity('menu_master')
 export class MenuMaster {
@@ -43,6 +44,13 @@ export class MenuMaster {
 
   @Column({ default: true })
   status: boolean;
+
+  @Column({ name: 'organization_id', nullable: true })
+  organizationId: string;
+
+  @ManyToOne(() => Organization, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

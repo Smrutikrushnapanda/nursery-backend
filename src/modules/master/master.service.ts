@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  OnModuleInit,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusinessType } from './business-type.entity';
@@ -23,8 +28,6 @@ export class MasterService implements OnModuleInit {
 
   async onModuleInit() {
     await this.seedBusinessTypes();
-    await this.seedCategories();
-    await this.seedSubCategories();
   }
 
   private async seedBusinessTypes() {
@@ -41,30 +44,78 @@ export class MasterService implements OnModuleInit {
     }
   }
 
-  private async seedCategories() {
-    const count = await this.categoryRepository.count();
+  private async seedCategories(organizationId: string) {
+    const count = await this.categoryRepository.count({
+      where: { organizationId },
+    });
     if (count === 0) {
       const categories = [
-        { name: 'agriculture' },
-        { name: 'ecommerce' },
-        { name: 'services' },
+        { name: 'agriculture', organizationId, status: true },
+        { name: 'ecommerce', organizationId, status: true },
+        { name: 'services', organizationId, status: true },
       ];
       await this.categoryRepository.save(categories);
-      console.log('Categories seeded');
+      console.log(`Categories seeded for org ${organizationId}`);
     }
   }
 
-  private async seedSubCategories() {
-    const count = await this.subCategoryRepository.count();
+  private async seedSubCategories(organizationId: string) {
+    const count = await this.subCategoryRepository.count({
+      where: { organizationId },
+    });
     if (count === 0) {
+      const categories = await this.categoryRepository.find({
+        where: { organizationId },
+      });
+      const categoryByName = new Map(
+        categories.map((category) => [category.name?.toLowerCase(), category.id]),
+      );
+
       const subCategories = [
-        { name: 'nursery', categoryId: 1 },
-        { name: 'seeds', categoryId: 1 },
-        { name: 'fashion', categoryId: 2 },
-      ];
-      await this.subCategoryRepository.save(subCategories);
-      console.log('Subcategories seeded');
+        { name: 'nursery', categoryId: categoryByName.get('agriculture') },
+        { name: 'seeds', categoryId: categoryByName.get('agriculture') },
+        { name: 'fashion', categoryId: categoryByName.get('ecommerce') },
+      ]
+        .filter((subCategory) => subCategory.categoryId)
+        .map((subCategory) => ({
+          ...subCategory,
+          organizationId,
+        }));
+
+      if (subCategories.length === 0) {
+        return;
+      }
+
+      await this.subCategoryRepository.save(
+        subCategories as Array<{ name: string; categoryId: number; organizationId: string }>,
+      );
+      console.log(`Subcategories seeded for org ${organizationId}`);
     }
+  }
+
+  private async ensureTenantMasterData(organizationId: string) {
+    await this.seedCategories(organizationId);
+    await this.seedSubCategories(organizationId);
+  }
+
+  private async validateParentMenuOwnership(
+    parentId: number,
+    organizationId: string,
+    currentMenuId?: number,
+  ) {
+    if (currentMenuId && parentId === currentMenuId) {
+      throw new BadRequestException('A menu cannot be its own parent.');
+    }
+
+    const parent = await this.menuMasterRepository.findOne({
+      where: { id: parentId, organizationId },
+    });
+
+    if (!parent) {
+      throw new NotFoundException(`Parent menu with ID ${parentId} not found`);
+    }
+
+    return parent;
   }
 
   async getBusinessTypes(): Promise<BusinessType[]> {
@@ -73,38 +124,64 @@ export class MasterService implements OnModuleInit {
     });
   }
 
-  async getCategories(): Promise<Category[]> {
+  async getCategories(organizationId: string): Promise<Category[]> {
+    await this.ensureTenantMasterData(organizationId);
     return this.categoryRepository.find({
+      where: { organizationId, status: true },
       order: { id: 'ASC' },
     });
   }
 
-  async getSubCategories(categoryId?: number): Promise<SubCategory[]> {
+  async getSubCategories(
+    organizationId: string,
+    categoryId?: number,
+  ): Promise<SubCategory[]> {
+    await this.ensureTenantMasterData(organizationId);
     if (categoryId) {
       return this.subCategoryRepository.find({
-        where: { categoryId },
+        where: { organizationId, categoryId },
         order: { id: 'ASC' },
       });
     }
     return this.subCategoryRepository.find({
+      where: { organizationId },
       order: { id: 'ASC' },
     });
   }
 
   // Menu Master CRUD operations
-  async createMenuMaster(createMenuMasterDto: CreateMenuMasterDto): Promise<MenuMaster> {
-    const menuMaster = this.menuMasterRepository.create(createMenuMasterDto);
+  async createMenuMaster(
+    createMenuMasterDto: CreateMenuMasterDto,
+    organizationId: string,
+  ): Promise<MenuMaster> {
+    if (createMenuMasterDto.parentId) {
+      await this.validateParentMenuOwnership(
+        createMenuMasterDto.parentId,
+        organizationId,
+      );
+    }
+
+    const menuMaster = this.menuMasterRepository.create({
+      ...createMenuMasterDto,
+      organizationId,
+    });
     return this.menuMasterRepository.save(menuMaster);
   }
 
-  async getAllMenuMasters(): Promise<MenuMaster[]> {
+  async getAllMenuMasters(organizationId: string): Promise<MenuMaster[]> {
     return this.menuMasterRepository.find({
+      where: { organizationId },
       order: { displayOrder: 'ASC' },
     });
   }
 
-  async getMenuMasterById(id: number): Promise<MenuMaster> {
-    const menuMaster = await this.menuMasterRepository.findOne({ where: { id } });
+  async getMenuMasterById(
+    id: number,
+    organizationId: string,
+  ): Promise<MenuMaster> {
+    const menuMaster = await this.menuMasterRepository.findOne({
+      where: { id, organizationId },
+    });
     if (!menuMaster) {
       throw new NotFoundException(`MenuMaster with ID ${id} not found`);
     }
@@ -114,8 +191,18 @@ export class MasterService implements OnModuleInit {
   async updateMenuMaster(
     id: number,
     updateMenuMasterDto: UpdateMenuMasterDto,
+    organizationId: string,
   ): Promise<MenuMaster> {
-    const menuMaster = await this.getMenuMasterById(id);
+    const menuMaster = await this.getMenuMasterById(id, organizationId);
+
+    if (updateMenuMasterDto.parentId) {
+      await this.validateParentMenuOwnership(
+        updateMenuMasterDto.parentId,
+        organizationId,
+        id,
+      );
+    }
+
     const updatedMenuMaster = this.menuMasterRepository.merge(
       menuMaster,
       updateMenuMasterDto,
@@ -123,8 +210,8 @@ export class MasterService implements OnModuleInit {
     return this.menuMasterRepository.save(updatedMenuMaster);
   }
 
-  async deleteMenuMaster(id: number): Promise<void> {
-    const menuMaster = await this.getMenuMasterById(id);
+  async deleteMenuMaster(id: number, organizationId: string): Promise<void> {
+    const menuMaster = await this.getMenuMasterById(id, organizationId);
     await this.menuMasterRepository.remove(menuMaster);
   }
 }
