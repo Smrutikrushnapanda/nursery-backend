@@ -18,7 +18,7 @@ import { MasterModule } from './modules/master/master.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { InvoiceModule } from './modules/invoices/invoice.module';
 import { PosModule } from './modules/pos/pos.module';
-import { LogsModule } from './modules/logs/logs.module';
+import { LogReportModule } from './modules/log-report/log-report.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 
@@ -119,7 +119,7 @@ function getDatabaseType(databaseUrl: string): TypeOrmModuleOptions['type'] {
     ReportsModule,
     InvoiceModule,
     PosModule,
-    LogsModule,
+    LogReportModule,
     PlansModule,
     SubscriptionsModule,
   ],
