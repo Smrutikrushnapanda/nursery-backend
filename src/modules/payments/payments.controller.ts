@@ -1,42 +1,50 @@
 import {
+  Body,
   Controller,
   Get,
-  Post,
-  Body,
-  Patch,
   Param,
-  Delete,
+  ParseIntPipe,
+  Post,
+  Request,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { FeatureGuard } from '../../common/guards/feature.guard';
+import { RequireFeature } from '../../common/decorators/require-feature.decorator';
+import { PlanFeature } from '../plans/entities/plan.entity';
 import { PaymentsService } from './payments.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { UpdatePaymentDto } from './dto/update-payment.dto';
 
+@ApiTags('Payments')
+@ApiBearerAuth()
+@UseGuards(AuthGuard('jwt'), FeatureGuard)
+@RequireFeature(PlanFeature.PAYMENTS)
 @Controller('payments')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
   @Post()
-  create(@Body() createPaymentDto: CreatePaymentDto) {
-    return this.paymentsService.create(createPaymentDto);
+  @ApiOperation({ summary: 'Pay for an order (cash / UPI / card / bank transfer)' })
+  create(@Body() dto: CreatePaymentDto, @Request() req: any) {
+    return this.paymentsService.create(dto, req.user.organizationId);
   }
 
   @Get()
-  findAll() {
-    return this.paymentsService.findAll();
+  @ApiOperation({ summary: 'Get all payments for the organization' })
+  findAll(@Request() req: any) {
+    return this.paymentsService.findAll(req.user.organizationId);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.paymentsService.findOne(+id);
+  @ApiOperation({ summary: 'Get payment by ID with full order details' })
+  findOne(@Param('id', ParseIntPipe) id: number, @Request() req: any) {
+    return this.paymentsService.findOne(id, req.user.organizationId);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePaymentDto: UpdatePaymentDto) {
-    return this.paymentsService.update(+id, updatePaymentDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.paymentsService.remove(+id);
+  @Get('order/:orderId')
+  @ApiOperation({ summary: 'Get payment by order ID' })
+  findByOrder(@Param('orderId', ParseIntPipe) orderId: number, @Request() req: any) {
+    return this.paymentsService.findByOrder(orderId, req.user.organizationId);
   }
 }

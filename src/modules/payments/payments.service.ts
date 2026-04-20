@@ -1,28 +1,105 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Payment, PaymentStatus } from './entities/payment.entity';
+import { Order, OrderStatus } from '../orders/entities/order.entity';
+import { Organization } from '../organizations/entities/organization.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
-import { UpdatePaymentDto } from './dto/update-payment.dto';
+import { InvoiceService } from '../invoices/invoice.service';
 
 @Injectable()
 export class PaymentsService {
-  create(createPaymentDto: CreatePaymentDto) {
-    void createPaymentDto;
-    return 'This action adds a new payment';
+  constructor(
+    @InjectRepository(Payment)
+    private readonly paymentRepo: Repository<Payment>,
+    @InjectRepository(Order)
+    private readonly orderRepo: Repository<Order>,
+    @InjectRepository(Organization)
+    private readonly orgRepo: Repository<Organization>,
+    private readonly invoiceService: InvoiceService,
+  ) {}
+
+  async create(dto: CreatePaymentDto, organizationId: string) {
+    const order = await this.orderRepo.findOne({
+      where: { id: dto.orderId, organizationId },
+      relations: ['payment'],
+    });
+
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.status === OrderStatus.CANCELLED) {
+      throw new BadRequestException('Cannot pay for a cancelled order');
+    }
+    if (order.payment) {
+      throw new ConflictException('Payment already exists for this order');
+    }
+
+    const payment = this.paymentRepo.create({
+      orderId: dto.orderId,
+      organizationId,
+      method: dto.method,
+      amount: order.totalAmount,
+      referenceNumber: dto.referenceNumber,
+      notes: dto.notes,
+      status: PaymentStatus.COMPLETED,
+    });
+
+    const saved = await this.paymentRepo.save(payment);
+
+    // Mark order as confirmed
+    order.status = OrderStatus.CONFIRMED;
+    await this.orderRepo.save(order);
+
+    // Load full order relations for invoice
+    const fullOrder = await this.orderRepo.findOne({
+      where: { id: saved.orderId },
+      relations: ['items', 'items.variant', 'items.variant.plant'],
+    });
+    const org = await this.orgRepo.findOne({ where: { id: organizationId } });
+
+    if (fullOrder && org) {
+      const invoiceUrl = await this.invoiceService.generateAndSend(
+        fullOrder,
+        saved,
+        org,
+        dto.customerEmail,
+      );
+      saved.invoiceUrl = invoiceUrl;
+      await this.paymentRepo.save(saved);
+    }
+
+    return saved;
   }
 
-  findAll() {
-    return `This action returns all payments`;
+  async findOne(id: number, organizationId: string) {
+    const payment = await this.paymentRepo.findOne({
+      where: { id, organizationId },
+      relations: ['order', 'order.items', 'order.items.variant', 'order.items.variant.plant'],
+    });
+
+    if (!payment) throw new NotFoundException('Payment not found');
+    return payment;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} payment`;
+  async findByOrder(orderId: number, organizationId: string) {
+    const payment = await this.paymentRepo.findOne({
+      where: { orderId, organizationId },
+      relations: ['order', 'order.items', 'order.items.variant', 'order.items.variant.plant'],
+    });
+
+    if (!payment) throw new NotFoundException('Payment not found for this order');
+    return payment;
   }
 
-  update(id: number, updatePaymentDto: UpdatePaymentDto) {
-    void updatePaymentDto;
-    return `This action updates a #${id} payment`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} payment`;
+  async findAll(organizationId: string) {
+    return this.paymentRepo.find({
+      where: { organizationId },
+      relations: ['order'],
+      order: { createdAt: 'DESC' },
+    });
   }
 }

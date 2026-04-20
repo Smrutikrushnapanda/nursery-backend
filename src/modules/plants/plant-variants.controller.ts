@@ -9,9 +9,11 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiProduces, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 import { PlantVariantsService } from './plant-variants.service';
@@ -55,6 +57,20 @@ export class PlantVariantsController {
     @CurrentOrganization() orgId: string | undefined,
   ) {
     return this.service.findOne(id, orgId);
+  }
+
+  @Get(':id/qr')
+  @ApiOperation({ summary: 'Get QR Code for Plant Variant' })
+  @ApiProduces('image/png')
+  @ApiResponse({ status: 200, description: 'QR code PNG image', schema: { type: 'string', format: 'binary' } })
+  async getQr(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentOrganization() orgId: string | undefined,
+    @Res() res: Response,
+  ) {
+    const qr = await this.service.generateQr(id, orgId);
+    res.setHeader('Content-Type', 'image/png');
+    res.send(qr);
   }
 
   @Patch(':id')

@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -15,6 +17,7 @@ import {
   AddStockDto,
   DeadStockDto,
   RemoveStockDto,
+  UpdateStockDto,
 } from './dto/stock-change.dto';
 import { InventoryService } from './inventory.service';
 
@@ -64,6 +67,40 @@ export class InventoryController {
       dto.variantId,
       dto.quantity,
       dto.reference,
+    );
+  }
+
+  @Put('stock')
+  @ApiOperation({ summary: 'Update stock quantity for a plant variant' })
+  updateStock(
+    @Body() dto: UpdateStockDto,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    return this.inventoryService.updateStock(
+      this.requireOrganization(organizationId),
+      dto.variantId,
+      dto.quantity,
+      dto.reason,
+    );
+  }
+
+  @Delete(':variantId')
+  @ApiOperation({ summary: 'Delete/clear stock for a plant variant' })
+  deleteStock(
+    @Param('variantId', ParseIntPipe) variantId: number,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    return this.inventoryService.deleteStock(
+      this.requireOrganization(organizationId),
+      variantId,
+    );
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get all stock for the organization' })
+  getAllStock(@CurrentOrganization() organizationId?: string) {
+    return this.inventoryService.getAllStock(
+      this.requireOrganization(organizationId),
     );
   }
 

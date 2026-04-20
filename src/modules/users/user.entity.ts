@@ -10,6 +10,7 @@ import { Organization } from '../organizations/entities/organization.entity';
 
 export enum UserRole {
   OWNER = 'owner',
+  MANAGER = 'manager',
   STAFF = 'staff',
 }
 
@@ -17,6 +18,9 @@ export enum UserRole {
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  @Column({ nullable: true })
+  name: string;
 
   @Column({ unique: true })
   email: string;

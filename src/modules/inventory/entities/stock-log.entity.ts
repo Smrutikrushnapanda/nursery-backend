@@ -14,6 +14,7 @@ export enum StockLogType {
   IN = 'IN',
   OUT = 'OUT',
   DEAD = 'DEAD',
+  ADJUST = 'ADJUST',
 }
 
 @Entity('stock_logs')

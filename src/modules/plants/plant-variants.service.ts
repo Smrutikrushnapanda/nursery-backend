@@ -5,15 +5,24 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
+import * as QRCode from 'qrcode';
 import { PlantVariant } from './plant-variant.entity';
 import { Plant } from './plant.entity';
 import { CreatePlantVariantDto } from './dto/create-plant-variant.dto';
 import { UpdatePlantVariantDto } from './dto/update-plant-variant.dto';
+import { PlantStock } from '../inventory/entities/plant-stock.entity';
 
 type QueryErrorLike = {
   code?: string;
   errno?: number;
 };
+
+type StockStatus = 'In Stock' | 'Low Stock' | 'Out of Stock';
+
+interface VariantWithStock extends PlantVariant {
+  stockQuantity?: number;
+  stockStatus?: StockStatus;
+}
 
 @Injectable()
 export class PlantVariantsService {
@@ -22,6 +31,8 @@ export class PlantVariantsService {
     private readonly plantVariantRepo: Repository<PlantVariant>,
     @InjectRepository(Plant)
     private readonly plantRepo: Repository<Plant>,
+    @InjectRepository(PlantStock)
+    private readonly stockRepo: Repository<PlantStock>,
   ) {}
 
   async create(dto: CreatePlantVariantDto, orgId: string) {
@@ -40,6 +51,7 @@ export class PlantVariantsService {
     const query = this.plantVariantRepo
       .createQueryBuilder('variant')
       .innerJoinAndSelect('variant.plant', 'plant', 'plant.status = :plantStatus', { plantStatus: true })
+      .leftJoinAndSelect('variant.stock', 'stock')
       .where('variant.status = :variantStatus', { variantStatus: true })
       .orderBy('variant.createdAt', 'DESC');
 
@@ -54,13 +66,15 @@ export class PlantVariantsService {
       query.andWhere('variant.plantId = :plantId', { plantId });
     }
 
-    return query.getMany();
+    const variants = await query.getMany();
+    return this.enrichVariantsWithStockStatus(variants);
   }
 
   async findOne(id: number, orgId: string | undefined) {
     const query = this.plantVariantRepo
       .createQueryBuilder('variant')
       .innerJoinAndSelect('variant.plant', 'plant', 'plant.status = :plantStatus', { plantStatus: true })
+      .leftJoinAndSelect('variant.stock', 'stock')
       .where('variant.id = :id', { id })
       .andWhere('variant.status = :variantStatus', { variantStatus: true });
 
@@ -74,7 +88,7 @@ export class PlantVariantsService {
       throw new NotFoundException(`Plant variant #${id} not found`);
     }
 
-    return variant;
+    return this.enrichVariantsWithStockStatus([variant])[0];
   }
 
   async update(id: number, dto: UpdatePlantVariantDto, orgId: string) {
@@ -98,6 +112,12 @@ export class PlantVariantsService {
     const variant = await this.findOne(id, orgId);
     variant.status = false;
     return this.plantVariantRepo.save(variant);
+  }
+
+  async generateQr(id: number, orgId: string | undefined): Promise<Buffer> {
+    const variant = await this.findOne(id, orgId);
+    const url = `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/product/${variant.id}`;
+    return QRCode.toBuffer(url, { width: 300, margin: 2 });
   }
 
   private async ensurePlantBelongsToOrg(plantId: number, orgId: string) {
@@ -126,5 +146,25 @@ export class PlantVariantsService {
         'Variant SKU must be unique within your organization',
       );
     }
+  }
+
+  private computeStockStatus(quantity: number, minQuantity: number): StockStatus {
+    if (quantity === 0) return 'Out of Stock';
+    if (quantity <= minQuantity) return 'Low Stock';
+    return 'In Stock';
+  }
+
+  private enrichVariantsWithStockStatus(variants: PlantVariant[]): (PlantVariant & { stockQuantity?: number; stockStatus?: StockStatus })[] {
+    return variants.map((variant) => {
+      const stock = variant.stock as PlantStock | undefined;
+      const stockQuantity = stock?.quantity ?? 0;
+      const stockStatus = this.computeStockStatus(stockQuantity, variant.minQuantity);
+
+      return {
+        ...variant,
+        stockQuantity,
+        stockStatus,
+      };
+    });
   }
 }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule, type TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { OrganizationsModule } from './modules/organizations/organizations.module';
@@ -11,8 +12,15 @@ import { UsersModule } from './modules/users/users.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { QrModule } from './modules/qr/qr.module';
+import { CartModule } from './modules/cart/cart.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MasterModule } from './modules/master/master.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { InvoiceModule } from './modules/invoices/invoice.module';
+import { PosModule } from './modules/pos/pos.module';
+import { LogsModule } from './modules/logs/logs.module';
+import { PlansModule } from './modules/plans/plans.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
@@ -63,6 +71,7 @@ function getDatabaseType(databaseUrl: string): TypeOrmModuleOptions['type'] {
       ],
       cache: true,
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
@@ -104,8 +113,15 @@ function getDatabaseType(databaseUrl: string): TypeOrmModuleOptions['type'] {
     PaymentsModule,
     OrdersModule,
     QrModule,
+    CartModule,
     InventoryModule,
     MasterModule,
+    ReportsModule,
+    InvoiceModule,
+    PosModule,
+    LogsModule,
+    PlansModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

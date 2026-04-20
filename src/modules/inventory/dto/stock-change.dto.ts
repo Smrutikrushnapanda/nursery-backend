@@ -33,3 +33,29 @@ export class AddStockDto extends StockChangeDto {}
 export class RemoveStockDto extends StockChangeDto {}
 
 export class DeadStockDto extends StockChangeDto {}
+
+export class UpdateStockDto {
+  @ApiProperty({ example: 12, description: 'Plant variant id' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  variantId: number;
+
+  @ApiProperty({
+    example: 50,
+    description: 'New quantity to set (must be a non-negative integer)',
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  quantity: number;
+
+  @ApiPropertyOptional({
+    example: 'Inventory adjustment',
+    description: 'Optional reason for the update',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  reason?: string;
+}

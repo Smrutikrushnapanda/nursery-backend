@@ -1,10 +1,13 @@
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const compression = require('compression') as () => any;
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { Application, Request, Response } from 'express';
 import { AppModule } from './app.module';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 function parseCorsOrigins(value?: string): true | string[] {
   if (!value) {
@@ -87,6 +90,8 @@ async function bootstrap() {
   });
   app.use(cookieParser());
   app.use(helmet());
+  app.use(compression());
+  app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

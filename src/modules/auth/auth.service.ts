@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../users/user.entity';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -19,6 +20,7 @@ export class AuthService {
     private readonly userRepo: Repository<User>,
     private readonly orgsService: OrganizationsService,
     private readonly jwtService: JwtService,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -45,6 +47,9 @@ export class AuthService {
       organizationId: org.id,
     });
     await this.userRepo.save(user);
+
+    // Auto-create 7-day free trial on registration
+    await this.subscriptionsService.createFreeTrial(org.id);
 
     const { id, isActive, createdAt, updatedAt, ...organizationData } = org;
     return { ...this.signToken(user), organization: organizationData };
