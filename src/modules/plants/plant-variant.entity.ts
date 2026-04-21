@@ -49,6 +49,9 @@ export class PlantVariant {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  mockPrice: number | null;
+
   @Column({ length: 100 })
   sku: string;
 

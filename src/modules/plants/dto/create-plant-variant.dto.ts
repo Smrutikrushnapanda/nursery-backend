@@ -54,4 +54,11 @@ export class CreatePlantVariantDto {
   @IsOptional()
   @IsString()
   barcode?: string;
+
+  @ApiPropertyOptional({ example: 300, description: 'Original/Mock price (for displaying discounted price)' })
+  @Type(() => Number)
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  mockPrice?: number;
 }

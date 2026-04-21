@@ -86,10 +86,10 @@ async function bootstrap() {
       apiBaseUrl: `/${apiPrefix}`,
     });
   });
-  app.enableCors({
-    origin: parseCorsOrigins(process.env.CORS_ORIGIN),
-    credentials: true,
-  });
+app.enableCors({
+  origin: true,  // allows all origins
+  credentials: true,
+});
   app.use(cookieParser());
   app.use(helmet());
   app.use(compression());

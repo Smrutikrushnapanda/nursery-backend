@@ -14,7 +14,7 @@ import {
 import { Transform, Type } from 'class-transformer';
 
 export class CreateOrganizationDto {
-  @ApiProperty({ example: 'Jagannath Nursery Store' })
+  @ApiProperty({ example: 'My Nursery Store' })
   @IsString()
   @IsNotEmpty()
   @MinLength(2)

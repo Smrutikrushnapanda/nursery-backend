@@ -14,7 +14,7 @@ import {
 } from 'class-validator';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'Jagannath Nursery Store' })
+  @ApiProperty({ example: 'My Nursery Store' })
   @IsString()
   @IsNotEmpty()
   @MinLength(2)

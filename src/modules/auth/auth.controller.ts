@@ -107,11 +107,8 @@ export class AuthController {
     logoFile: any,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { accessToken, ...result } = await this.authService.register(
-      dto,
-      logoFile,
-    );
-    setAuthCookies(res, accessToken);
+    const result = await this.authService.register(dto, logoFile);
+    setAuthCookies(res, result.accessToken);
     return result;
   }
 
@@ -121,8 +118,8 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { accessToken, ...result } = await this.authService.login(dto);
-    setAuthCookies(res, accessToken);
+    const result = await this.authService.login(dto);
+    setAuthCookies(res, result.accessToken);
     return result;
   }
 
