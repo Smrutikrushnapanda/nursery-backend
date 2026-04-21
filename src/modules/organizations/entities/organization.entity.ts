@@ -34,4 +34,14 @@ export class Organization {
 
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
+
+  @Column('text', { name: 'business_hours', nullable: true })
+  businessHoursJson: string;
+}
+
+export interface BusinessHours {
+  day: string; // 'monday', 'tuesday', etc.
+  open: string; // '09:00'
+  close: string; // '18:00'
+  isOpen: boolean; // true
 }

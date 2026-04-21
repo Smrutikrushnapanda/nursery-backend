@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEmail,
@@ -7,7 +8,6 @@ import {
   IsOptional,
   IsString,
   IsStrongPassword,
-  IsUrl,
   Matches,
   MaxLength,
   MinLength,
@@ -42,31 +42,37 @@ export class RegisterDto {
   @MaxLength(255)
   address!: string;
 
-  @ApiPropertyOptional({
-    example:
-      'https://images-platform.99static.com/X2v_BF-mAJySsyQiC-ofV042ZhQ/0x0:1400x1400/fit-in/500x500/logo.png',
-  })
-  @IsOptional()
-  @IsUrl()
-  @MaxLength(500)
-  logoUrl?: string;
-
   @ApiPropertyOptional({ example: true })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const lowered = value.toLowerCase();
+      if (lowered === 'true') {
+        return true;
+      }
+      if (lowered === 'false') {
+        return false;
+      }
+    }
+    return value;
+  })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 
   @ApiProperty({ example: 2 })
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   businessTypeId!: number;
 
   @ApiProperty({ example: 1 })
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   categoryId!: number;
 
   @ApiProperty({ example: 1 })
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   subcategoryId!: number;

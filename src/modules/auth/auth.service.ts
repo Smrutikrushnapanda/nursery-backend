@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import type { Express } from 'express';
 import { User } from '../users/user.entity';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
@@ -23,7 +24,7 @@ export class AuthService {
     private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto, logoFile?: Express.Multer.File) {
     const existing = await this.userRepo.findOne({
       where: { email: dto.email },
     });
@@ -31,14 +32,16 @@ export class AuthService {
       throw new ConflictException('Email already registered');
     }
 
-    const org = await this.orgsService.create({
-      organizationName: dto.organizationName,
-      email: dto.email,
-      phone: dto.phone,
-      address: dto.address,
-      logoUrl: dto.logoUrl,
-      isActive: dto.isActive,
-    });
+    const org = await this.orgsService.create(
+      {
+        organizationName: dto.organizationName,
+        email: dto.email,
+        phone: dto.phone,
+        address: dto.address,
+        isActive: dto.isActive,
+      },
+      logoFile,
+    );
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = this.userRepo.create({
@@ -63,7 +66,8 @@ export class AuthService {
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     const organization = await this.orgsService.findOne(user.organizationId);
-    const { id, isActive, createdAt, updatedAt, ...organizationData } = organization;
+    const { id, isActive, createdAt, updatedAt, ...organizationData } =
+      organization;
     return { ...this.signToken(user), organization: organizationData };
   }
 

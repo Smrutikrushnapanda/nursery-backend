@@ -3,23 +3,27 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Express } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization } from './entities/organization.entity';
+import { CloudinaryService } from '../uploads/cloudinary.service';
 
 @Injectable()
 export class OrganizationsService {
   constructor(
     @InjectRepository(Organization)
     private readonly orgRepo: Repository<Organization>,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   async create(
     createOrganizationDto: CreateOrganizationDto,
+    logoFile?: Express.Multer.File,
   ): Promise<Organization> {
-    const { organizationName, email, phone, address, logoUrl, isActive } =
+    const { organizationName, email, phone, address, isActive } =
       createOrganizationDto;
 
     // Check if email already exists
@@ -31,12 +35,16 @@ export class OrganizationsService {
       throw new ConflictException('Organization email already taken');
     }
 
+    const logoUrl = logoFile
+      ? await this.cloudinaryService.uploadOrganizationLogo(logoFile)
+      : null;
+
     const org = this.orgRepo.create({
       organizationName,
       email,
       phone,
       address,
-      logoUrl: logoUrl ?? null,
+      logoUrl,
       ...(typeof isActive === 'boolean' ? { isActive } : {}),
     });
 

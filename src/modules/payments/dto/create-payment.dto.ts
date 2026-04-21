@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsInt, IsOptional, IsPositive, IsString, MaxLength } from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsOptional, IsPositive, IsString, MaxLength, ValidateIf } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethod } from '../entities/payment.entity';
 
@@ -11,6 +11,12 @@ export class CreatePaymentDto {
   @ApiProperty({ enum: PaymentMethod, example: PaymentMethod.CASH })
   @IsEnum(PaymentMethod)
   method: PaymentMethod;
+
+  @ApiPropertyOptional({ example: 500, description: 'Payment amount (required for CASH payments to handle change)' })
+  @ValidateIf((o) => o.method === PaymentMethod.CASH)
+  @IsInt()
+  @IsPositive()
+  amount?: number;
 
   @ApiPropertyOptional({ example: 'TXN123456', description: 'UPI / card reference number' })
   @IsOptional()

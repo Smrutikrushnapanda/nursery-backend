@@ -21,6 +21,7 @@ import { PosModule } from './modules/pos/pos.module';
 import { LogReportModule } from './modules/log-report/log-report.module';
 import { PlansModule } from './modules/plans/plans.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
+import { EmailModule } from './modules/email/email.module';
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
@@ -122,6 +123,7 @@ function getDatabaseType(databaseUrl: string): TypeOrmModuleOptions['type'] {
     LogReportModule,
     PlansModule,
     SubscriptionsModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [AppService],

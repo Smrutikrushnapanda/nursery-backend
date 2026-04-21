@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Payment, PaymentStatus } from './entities/payment.entity';
+import { Payment, PaymentMethod, PaymentStatus } from './entities/payment.entity';
 import { Order, OrderStatus } from '../orders/entities/order.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -38,11 +38,23 @@ export class PaymentsService {
       throw new ConflictException('Payment already exists for this order');
     }
 
+    // For CASH payments, use the provided amount (for giving change)
+    // For other payment methods, use order totalAmount
+    let paymentAmount: number;
+    if (dto.method === PaymentMethod.CASH) {
+      if (!dto.amount || dto.amount <= 0) {
+        throw new BadRequestException('Amount is required for CASH payments');
+      }
+      paymentAmount = dto.amount;
+    } else {
+      paymentAmount = order.totalAmount;
+    }
+
     const payment = this.paymentRepo.create({
       orderId: dto.orderId,
       organizationId,
       method: dto.method,
-      amount: order.totalAmount,
+      amount: paymentAmount,
       referenceNumber: dto.referenceNumber,
       notes: dto.notes,
       status: PaymentStatus.COMPLETED,

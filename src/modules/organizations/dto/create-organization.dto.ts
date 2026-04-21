@@ -5,11 +5,13 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUrl,
+  IsArray,
+  ValidateNested,
   MaxLength,
   MinLength,
   Matches,
 } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class CreateOrganizationDto {
   @ApiProperty({ example: 'Jagannath Nursery Store' })
@@ -29,7 +31,7 @@ export class CreateOrganizationDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(25)
-  @Matches(/^[+0-9()\-\s]+$/, {
+  @Matches(/^[+0-9()-\s]+$/, {
     message: 'phone must contain only numbers, spaces, +, -, or parentheses',
   })
   phone!: string;
@@ -40,14 +42,51 @@ export class CreateOrganizationDto {
   @MaxLength(255)
   address!: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/logo.png' })
-  @IsOptional()
-  @IsUrl()
-  @MaxLength(500)
-  logoUrl?: string;
-
   @ApiPropertyOptional({ example: true })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const lowered = value.toLowerCase();
+      if (lowered === 'true') {
+        return true;
+      }
+      if (lowered === 'false') {
+        return false;
+      }
+    }
+    return value;
+  })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    example: [
+      { day: 'monday', open: '09:00', close: '18:00', isOpen: true },
+      { day: 'tuesday', open: '09:00', close: '18:00', isOpen: true },
+    ],
+    description: 'Business hours for each day of the week',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BusinessHoursDto)
+  businessHours?: BusinessHoursDto[];
+}
+
+export class BusinessHoursDto {
+  @ApiProperty({ example: 'monday' })
+  @IsString()
+  day: string;
+
+  @ApiProperty({ example: '09:00' })
+  @IsString()
+  open: string;
+
+  @ApiProperty({ example: '18:00' })
+  @IsString()
+  close: string;
+
+  @ApiProperty({ example: true })
+  @IsBoolean()
+  isOpen: boolean;
 }
