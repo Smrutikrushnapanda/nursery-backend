@@ -49,12 +49,29 @@ export class PlantsService {
       ? await this.cloudinaryService.uploadPlantImage(imageFiles[0])
       : null;
 
-    const { categoryId, subcategoryId, ...restDto } = dto;
+    const {
+      categoryId,
+      subcategoryId,
+      temperatureMin,
+      temperatureMax,
+      ...restDto
+    } = dto;
+
+    const parsedTemperatureMin =
+      temperatureMin === undefined || temperatureMin === ''
+        ? undefined
+        : Number(temperatureMin);
+    const parsedTemperatureMax =
+      temperatureMax === undefined || temperatureMax === ''
+        ? undefined
+        : Number(temperatureMax);
 
     const plant = this.plantRepo.create({
       ...restDto,
       categoryId: Number(categoryId),
       subcategoryId: Number(subcategoryId),
+      temperatureMin: parsedTemperatureMin,
+      temperatureMax: parsedTemperatureMax,
       imageUrl,
       organizationId: orgId,
     });

@@ -41,7 +41,10 @@ export class OrganizationsController {
         email: { type: 'string' },
         phone: { type: 'string' },
         address: { type: 'string' },
-        isActive: { type: 'boolean' },
+        isActive: {
+          type: 'string',
+          description: "Send 'true' or 'false' as string in form-data",
+        },
         logo: {
           type: 'string',
           format: 'binary',

@@ -42,7 +42,10 @@ export class CreateOrganizationDto {
   @MaxLength(255)
   address!: string;
 
-  @ApiPropertyOptional({ example: true })
+  @ApiPropertyOptional({
+    example: 'true',
+    description: "Send 'true' or 'false' as string in form-data",
+  })
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       const lowered = value.toLowerCase();

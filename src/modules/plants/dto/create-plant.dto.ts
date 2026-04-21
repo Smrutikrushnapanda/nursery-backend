@@ -54,24 +54,22 @@ export class CreatePlantDto {
   sunlightRequirement?: string;
 
   @ApiProperty({
-    example: 15,
+    example: '15',
     required: false,
     description: 'Minimum temperature in Celsius',
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  temperatureMin?: number;
+  @IsNumberString()
+  temperatureMin?: string;
 
   @ApiProperty({
-    example: 30,
+    example: '30',
     required: false,
     description: 'Maximum temperature in Celsius',
   })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  temperatureMax?: number;
+  @IsNumberString()
+  temperatureMax?: string;
 
   @ApiProperty({
     example: 'Medium',
@@ -151,8 +149,8 @@ export class CreatePlantDto {
 
   @ApiProperty({
     example: [
-      { imageUrl: 'https://cloudinary.com/image1.jpg', isPrimary: true, displayOrder: 0 },
-      { imageUrl: 'https://cloudinary.com/image2.jpg', isPrimary: false, displayOrder: 1 },
+      { imageUrl: 'https://image1.jpg', isPrimary: true, displayOrder: 0 },
+      { imageUrl: 'https://image2.jpg', isPrimary: false, displayOrder: 1 },
     ],
     required: false,
     description: 'Array of plant images for slider',
@@ -165,7 +163,7 @@ export class CreatePlantDto {
 }
 
 export class PlantImageDto {
-  @ApiProperty({ example: 'https://cloudinary.com/image1.jpg' })
+  @ApiProperty({ example: 'https://image1.jpg' })
   @IsNotEmpty()
   @IsString()
   imageUrl: string;
