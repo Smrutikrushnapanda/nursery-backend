@@ -3,25 +3,25 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Express } from 'express';
+import type { Multer } from 'multer';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization } from './entities/organization.entity';
-import { CloudinaryService } from '../uploads/cloudinary.service';
+import { FileUploadService } from '../uploads/file-upload.service';
 
 @Injectable()
 export class OrganizationsService {
   constructor(
     @InjectRepository(Organization)
     private readonly orgRepo: Repository<Organization>,
-    private readonly cloudinaryService: CloudinaryService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   async create(
     createOrganizationDto: CreateOrganizationDto,
-    logoFile?: Express.Multer.File,
+    logoFile?: any,
   ): Promise<Organization> {
     const { organizationName, email, phone, address, isActive } =
       createOrganizationDto;
@@ -36,7 +36,7 @@ export class OrganizationsService {
     }
 
     const logoUrl = logoFile
-      ? await this.cloudinaryService.uploadOrganizationLogo(logoFile)
+      ? await this.fileUploadService.uploadOrganizationLogo(logoFile)
       : null;
 
     const org = this.orgRepo.create({

@@ -1,21 +1,24 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Param,
-  ParseFilePipeBuilder,
   ParseIntPipe,
   Patch,
   Post,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { PlantsService } from './plants.service';
 import { CreatePlantDto } from './dto/create-plant.dto';
 import { UpdatePlantDto } from './dto/update-plant.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import * as multer from 'multer';
+import * as path from 'path';
+import * as fs from 'fs';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -26,13 +29,38 @@ import {
 import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
-// Use any for multer file to avoid type issues
+
+function plantImageStorage(): multer.StorageEngine {
+  const dest = path.join(process.cwd(), 'uploads', 'plants', 'images');
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  return multer.diskStorage({
+    destination: dest,
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname);
+      const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
+      cb(null, `${name}-${uniqueSuffix}${ext}`);
+    },
+  });
+}
 
 @ApiTags('Master - Plants')
 @ApiBearerAuth()
 @Controller('master/plant')
 export class PlantsController {
-  constructor(private readonly service: PlantsService) {}
+  constructor(
+    private readonly service: PlantsService,
+  ) {}
+
+  private static readonly ALLOWED_IMAGE_MIME_TYPES = new Set([
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'image/svg+xml',
+  ]);
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -69,23 +97,29 @@ export class PlantsController {
     },
   })
   @UseInterceptors(
-    FileInterceptor('images', { limits: { fileSize: 5 * 1024 * 1024 } }),
+    FilesInterceptor('images', 10, {
+      limits: { fileSize: 5 * 1024 * 1024 },
+      storage: plantImageStorage(),
+    }),
   )
   @ApiOperation({ summary: 'Create Plant' })
   create(
     @Body() dto: CreatePlantDto,
     @CurrentOrganization() orgId: string,
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addFileTypeValidator({
-          fileType: /^image\/(jpeg|png|webp|gif|svg\+xml)$/,
-        })
-        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
-        .build({ fileIsRequired: false }),
-    )
-    imageFile?: any,
+    @UploadedFiles() imageFiles?: any[],
   ) {
-    return this.service.create(dto, orgId, imageFile ? [imageFile] : []);
+    const invalidMimeType = imageFiles?.find(
+      (file) =>
+        !PlantsController.ALLOWED_IMAGE_MIME_TYPES.has(file.mimetype),
+    )?.mimetype;
+
+    if (invalidMimeType) {
+      throw new BadRequestException(
+        `Unsupported image file type: ${invalidMimeType}`,
+      );
+    }
+
+    return this.service.create(dto, orgId, imageFiles ?? []);
   }
 
   @Get()

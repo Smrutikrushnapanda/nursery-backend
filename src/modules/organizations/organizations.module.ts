@@ -3,10 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Organization } from './entities/organization.entity';
 import { OrganizationsController } from './organizations.controller';
 import { OrganizationsService } from './organizations.service';
-import { CloudinaryModule } from '../uploads/cloudinary.module';
+import { FileUploadModule } from '../uploads/file-upload.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Organization]), CloudinaryModule],
+  imports: [TypeOrmModule.forFeature([Organization]), FileUploadModule],
   controllers: [OrganizationsController],
   providers: [OrganizationsService],
   exports: [OrganizationsService],

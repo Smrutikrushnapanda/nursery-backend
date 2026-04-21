@@ -8,6 +8,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { Application, Request, Response } from 'express';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import * as path from 'path';
+import * as express from 'express';
 
 function parseCorsOrigins(value?: string): true | string[] {
   if (!value) {
@@ -99,6 +101,10 @@ async function bootstrap() {
       forbidNonWhitelisted: isProduction,
     }),
   );
+
+  // Serve uploaded files statically
+  const uploadsPath = path.join(process.cwd(), 'uploads');
+  app.use('/uploads', express.static(uploadsPath));
 
   if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()

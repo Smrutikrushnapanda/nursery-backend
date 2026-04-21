@@ -15,7 +15,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Express, Response } from 'express';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -87,7 +87,7 @@ export class AuthController {
         .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
         .build({ fileIsRequired: false }),
     )
-    logoFile: Express.Multer.File | undefined,
+    logoFile: any,
     @Res({ passthrough: true }) res: Response,
   ) {
     const { accessToken, ...result } = await this.authService.register(

@@ -12,6 +12,9 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import * as multer from 'multer';
+import * as path from 'path';
+import * as fs from 'fs';
 import {
   ApiBody,
   ApiConsumes,
@@ -20,15 +23,33 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Express } from 'express';
+import type { Multer } from 'multer';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 
+function organizationLogoStorage(): multer.StorageEngine {
+  const dest = path.join(process.cwd(), 'uploads', 'organizations', 'logos');
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  return multer.diskStorage({
+    destination: dest,
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname);
+      const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9-_]/g, '_');
+      cb(null, `${name}-${uniqueSuffix}${ext}`);
+    },
+  });
+}
+
 @ApiTags('Organizations')
 @Controller('organizations')
 export class OrganizationsController {
-  constructor(private readonly organizationsService: OrganizationsService) {}
+  constructor(
+    private readonly organizationsService: OrganizationsService,
+  ) {}
 
   @Post()
   @ApiConsumes('multipart/form-data')
@@ -54,7 +75,10 @@ export class OrganizationsController {
     },
   })
   @UseInterceptors(
-    FileInterceptor('logo', { limits: { fileSize: 5 * 1024 * 1024 } }),
+    FileInterceptor('logo', { 
+      limits: { fileSize: 5 * 1024 * 1024 },
+      storage: organizationLogoStorage(),
+    }),
   )
   @ApiOperation({ summary: 'Create a new organization' })
   @ApiResponse({
@@ -72,7 +96,7 @@ export class OrganizationsController {
         .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
         .build({ fileIsRequired: false }),
     )
-    logoFile?: Express.Multer.File,
+    logoFile?: any,
   ) {
     return this.organizationsService.create(createOrganizationDto, logoFile);
   }

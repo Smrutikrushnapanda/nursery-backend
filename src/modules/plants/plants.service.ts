@@ -7,8 +7,7 @@ import { CreatePlantDto, PlantImageDto } from './dto/create-plant.dto';
 import { UpdatePlantDto } from './dto/update-plant.dto';
 import { PlantVariant } from './plant-variant.entity';
 import { PlantStock } from '../inventory/entities/plant-stock.entity';
-// Use any for multer file to avoid type issues
-import { CloudinaryService } from '../uploads/cloudinary.service';
+import { FileUploadService } from '../uploads/file-upload.service';
 
 type StockStatus = 'In Stock' | 'Low Stock' | 'Out of Stock';
 
@@ -28,7 +27,7 @@ export class PlantsService {
     private readonly stockRepo: Repository<PlantStock>,
     @InjectRepository(PlantImage)
     private readonly plantImageRepo: Repository<PlantImage>,
-    private readonly cloudinaryService: CloudinaryService,
+    private readonly fileUploadService: FileUploadService,
   ) {}
 
   async create(
@@ -46,7 +45,7 @@ export class PlantsService {
 
     // Upload single image for backward compatibility
     const imageUrl = imageFiles?.length
-      ? await this.cloudinaryService.uploadPlantImage(imageFiles[0])
+      ? await this.fileUploadService.uploadPlantImage(imageFiles[0])
       : null;
 
     const {
@@ -82,7 +81,7 @@ export class PlantsService {
       const imageEntities = await Promise.all(
         imageFiles.map(async (file, index) =>
           this.plantImageRepo.create({
-            imageUrl: await this.cloudinaryService.uploadPlantImage(file),
+            imageUrl: await this.fileUploadService.uploadPlantImage(file),
             plantId: savedPlant.id,
             organizationId: orgId,
             isPrimary: index === 0, // First image is primary by default

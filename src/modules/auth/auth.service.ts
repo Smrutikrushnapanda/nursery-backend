@@ -24,7 +24,7 @@ export class AuthService {
     private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
-  async register(dto: RegisterDto, logoFile?: Express.Multer.File) {
+  async register(dto: RegisterDto, logoFile?: any) {
     const existing = await this.userRepo.findOne({
       where: { email: dto.email },
     });

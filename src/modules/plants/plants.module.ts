@@ -8,12 +8,12 @@ import { PlantVariant } from './plant-variant.entity';
 import { PlantVariantsService } from './plant-variants.service';
 import { PlantVariantsController } from './plant-variants.controller';
 import { PlantStock } from '../inventory/entities/plant-stock.entity';
-import { CloudinaryModule } from '../uploads/cloudinary.module';
+import { FileUploadModule } from '../uploads/file-upload.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Plant, PlantVariant, PlantStock, PlantImage]),
-    CloudinaryModule,
+    FileUploadModule,
   ],
   controllers: [PlantsController, PlantVariantsController],
   providers: [PlantsService, PlantVariantsService],
