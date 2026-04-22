@@ -243,7 +243,7 @@ export class MasterService implements OnModuleInit {
     }
 
     const parent = await this.menuMasterRepository.findOne({
-      where: { id: parentId, organizationId },
+      where: [{ id: parentId, organizationId }, { id: parentId, organizationId: IsNull() }],
     });
 
     if (!parent) {

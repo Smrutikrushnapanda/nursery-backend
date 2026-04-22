@@ -107,8 +107,12 @@ export class PlantsService {
     return this.findOne(savedPlant.id, orgId);
   }
 
-  async findAll(orgId: string | undefined) {
-    const plants = await this.plantRepo
+  async findAll(
+    orgId: string | undefined,
+    categoryId?: string,
+    subcategoryId?: string,
+  ) {
+    const query = this.plantRepo
       .createQueryBuilder('plant')
       .leftJoinAndSelect('plant.category', 'category')
       .leftJoinAndSelect('plant.subcategory', 'subcategory')
@@ -121,7 +125,23 @@ export class PlantsService {
       .leftJoinAndSelect('variant.stock', 'stock')
       .leftJoinAndSelect('plant.images', 'image')
       .where(orgId ? 'plant.organizationId = :orgId' : '1=1', { orgId })
-      .andWhere('plant.status = :plantStatus', { plantStatus: true })
+      .andWhere('plant.status = :plantStatus', { plantStatus: true });
+
+    // Apply categoryId filter if provided
+    if (categoryId && categoryId !== '' && categoryId !== 'undefined') {
+      query.andWhere('plant.categoryId = :categoryId', {
+        categoryId: Number(categoryId),
+      });
+    }
+
+    // Apply subcategoryId filter if provided
+    if (subcategoryId && subcategoryId !== '' && subcategoryId !== 'undefined') {
+      query.andWhere('plant.subcategoryId = :subcategoryId', {
+        subcategoryId: Number(subcategoryId),
+      });
+    }
+
+    const plants = await query
       .orderBy('plant.createdAt', 'DESC')
       .addOrderBy('image.displayOrder', 'ASC')
       .getMany();

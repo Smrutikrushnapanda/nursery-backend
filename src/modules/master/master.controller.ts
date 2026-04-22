@@ -32,15 +32,16 @@ export class MasterController {
 
   @Get('dashboard/subcategories')
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Get subcategories (Dashboard)', description: 'Dashboard flow endpoint. Retrieve subcategories for the organization. Optionally filter by categoryId.' })
+  @ApiOperation({ summary: 'Get subcategories (Dashboard)', description: 'Dashboard flow endpoint. Retrieve all subcategories for the organization.' })
   @ApiQuery({
     name: 'categoryId',
     required: false,
-    description: 'Filter by category ID',
+    type: 'Number',
+    description: 'Optional: Filter subcategories by category ID',
   })
   @ApiResponse({
     status: 200,
-    description: 'Returns all subcategories or filtered by category',
+    description: 'Returns all subcategories',
   })
   async getDashboardSubCategories(
     @CurrentOrganization() orgId?: string,

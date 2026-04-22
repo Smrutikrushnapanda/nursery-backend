@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -24,6 +25,7 @@ import {
   ApiBody,
   ApiConsumes,
   ApiOperation,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
@@ -124,9 +126,15 @@ export class PlantsController {
 
   @Get()
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Get All Plants' })
-  findAll(@CurrentOrganization() orgId: string | undefined) {
-    return this.service.findAll(orgId);
+  @ApiOperation({ summary: 'Get All Plants', description: 'Get all plants. Optionally filter by categoryId or subcategoryId using query parameters.' })
+  @ApiQuery({ name: 'categoryId', required: false, description: 'Filter by category ID', type: Number })
+  @ApiQuery({ name: 'subcategoryId', required: false, description: 'Filter by subcategory ID', type: Number })
+  findAll(
+    @CurrentOrganization() orgId: string | undefined,
+    @Query('categoryId') categoryId?: string,
+    @Query('subcategoryId') subcategoryId?: string,
+  ) {
+    return this.service.findAll(orgId, categoryId, subcategoryId);
   }
 
   @Get(':id')
