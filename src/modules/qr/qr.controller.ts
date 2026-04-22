@@ -64,6 +64,24 @@ export class QrController {
     });
   }
 
+  @ApiOperation({ summary: 'Scan by product ID — returns plant data (PUBLIC, no auth)' })
+  @ApiParam({ name: 'productId', type: String, description: 'Product ID' })
+  @ApiQuery({ name: 'location', required: false, description: 'Scan location' })
+  @ApiQuery({ name: 'device', required: false, description: 'Device info' })
+  @Get('scan/id/:productId')
+  scanById(
+    @Param('productId') productId: string,
+    @Query('location') location?: string,
+    @Query('device') device?: string,
+    @Headers('x-forwarded-for') ip?: string,
+  ) {
+    return this.qrService.scanById(productId, {
+      scanLocation: location,
+      deviceInfo: device,
+      ipAddress: ip,
+    });
+  }
+
   // Legacy endpoint for backward compatibility
   @Get(':code')
   scanLegacy(@Param('code') code: string) {

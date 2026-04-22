@@ -427,10 +427,11 @@ export class MasterService implements OnModuleInit {
     updateSubCategoryDto: UpdateSubCategoryDto,
     organizationId: string,
   ): Promise<SubCategory> {
-    const subCategory = await this.getSubCategoryById(id, organizationId);
+    const subCategory = await this.getDashboardSubCategoryById(id, organizationId);
+    let nextCategory: Category | null = null;
 
     // If updating categoryId, validate the new category exists
-    if (updateSubCategoryDto.categoryId) {
+    if (updateSubCategoryDto.categoryId !== undefined) {
       const category = await this.categoryRepository.findOne({
         where: { id: updateSubCategoryDto.categoryId, organizationId },
       });
@@ -439,13 +440,20 @@ export class MasterService implements OnModuleInit {
           `Category with ID ${updateSubCategoryDto.categoryId} not found`,
         );
       }
+      nextCategory = category;
     }
 
     const updatedSubCategory = this.subCategoryRepository.merge(
       subCategory,
       updateSubCategoryDto,
     );
-    return this.subCategoryRepository.save(updatedSubCategory);
+    if (nextCategory) {
+      updatedSubCategory.categoryId = nextCategory.id;
+      updatedSubCategory.category = nextCategory;
+    }
+    await this.subCategoryRepository.save(updatedSubCategory);
+    // Reload to get the updated category relation
+    return this.getDashboardSubCategoryById(id, organizationId);
   }
 
   async deleteSubCategory(

@@ -83,6 +83,71 @@ export class QrService {
     };
   }
 
+  async scanById(productId: string, metadata?: {
+    scannedBy?: string;
+    scanLocation?: string;
+    deviceInfo?: string;
+    ipAddress?: string;
+  }) {
+    // Try to find plant by ID
+    const plant = await this.plantRepo.findOne({
+      where: { id: +productId },
+      relations: ['category', 'subcategory', 'variants'],
+    });
+
+    if (!plant) {
+      // Try to find by qrCodeUrl
+      const qrCode = await this.qrRepo.findOne({
+        where: { code: productId },
+        relations: ['plant', 'plant.category', 'plant.subcategory', 'plant.variants'],
+      });
+      
+      if (!qrCode) {
+        throw new NotFoundException('Product not found');
+      }
+      
+      // Log the scan event
+      const scanLogData: DeepPartial<QrScanLog> = {
+        qrCode: qrCode.code,
+        plantId: qrCode.plantId,
+        organizationId: qrCode.organizationId,
+        scannedBy: metadata?.scannedBy || undefined,
+        scanLocation: metadata?.scanLocation || undefined,
+        deviceInfo: metadata?.deviceInfo || undefined,
+        ipAddress: metadata?.ipAddress || undefined,
+      };
+      const scanLog = this.scanLogRepo.create(scanLogData);
+      await this.scanLogRepo.save(scanLog);
+
+      return {
+        code: qrCode.code,
+        id: qrCode.id,
+        plant: qrCode.plant,
+        scannedAt: new Date(),
+      };
+    }
+
+    // Log the scan event
+    const scanLogData: DeepPartial<QrScanLog> = {
+      qrCode: `ID-${productId}`,
+      plantId: plant.id,
+      organizationId: plant.organizationId,
+      scannedBy: metadata?.scannedBy || undefined,
+      scanLocation: metadata?.scanLocation || undefined,
+      deviceInfo: metadata?.deviceInfo || undefined,
+      ipAddress: metadata?.ipAddress || undefined,
+    };
+    const scanLog = this.scanLogRepo.create(scanLogData);
+    await this.scanLogRepo.save(scanLog);
+
+    return {
+      code: plant.qrCodeUrl || `ID-${productId}`,
+      id: plant.id,
+      plant,
+      scannedAt: new Date(),
+    };
+  }
+
   async getScanLogs(organizationId: string, plantId?: number) {
     const where: any = { organizationId };
     if (plantId) where.plantId = plantId;
