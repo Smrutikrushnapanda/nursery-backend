@@ -282,33 +282,65 @@ export class MasterService implements OnModuleInit {
   async getSubCategories(
     organizationId?: string,
     categoryId?: number,
-  ): Promise<SubCategory[]> {
+  ): Promise<Array<Omit<SubCategory, 'category'> & { categoryName: string }>> {
     if (!organizationId) {
       if (categoryId) {
-        return this.subCategoryRepository.find({
-          where: { categoryId },
+        const results = await this.subCategoryRepository.find({
+          relations: ['category'],
           order: { id: 'ASC' },
+          where: { categoryId },
+        });
+        return results.map((sub) => {
+          const { category, ...rest } = sub;
+          return {
+            ...rest,
+            categoryName: category?.name || '',
+          };
         });
       }
 
-      return this.subCategoryRepository.find({
+      const results = await this.subCategoryRepository.find({
+        relations: ['category'],
         order: { id: 'ASC' },
+      });
+      return results.map((sub) => {
+        const { category, ...rest } = sub;
+        return {
+          ...rest,
+          categoryName: category?.name || '',
+        };
       });
     }
 
     await this.ensureTenantMasterData(organizationId);
     if (categoryId) {
-      return this.subCategoryRepository.find({
+      const results = await this.subCategoryRepository.find({
+        relations: ['category'],
+        order: { id: 'ASC' },
         where: [
           { organizationId, categoryId },
           { organizationId: IsNull(), categoryId },
         ],
-        order: { id: 'ASC' },
+      });
+      return results.map((sub) => {
+        const { category, ...rest } = sub;
+        return {
+          ...rest,
+          categoryName: category?.name || '',
+        };
       });
     }
-    return this.subCategoryRepository.find({
-      where: [{ organizationId }, { organizationId: IsNull() }],
+    const results = await this.subCategoryRepository.find({
+      relations: ['category'],
       order: { id: 'ASC' },
+      where: [{ organizationId }, { organizationId: IsNull() }],
+    });
+    return results.map((sub) => {
+      const { category, ...rest } = sub;
+      return {
+        ...rest,
+        categoryName: category?.name || '',
+      };
     });
   }
 
