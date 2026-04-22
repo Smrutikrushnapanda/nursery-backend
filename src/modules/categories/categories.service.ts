@@ -48,6 +48,7 @@ export class CategoriesService {
     return {
       success: true,
       message: 'Categories fetched successfully',
+      data: categories,
     };
   }
 
