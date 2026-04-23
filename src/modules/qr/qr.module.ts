@@ -6,9 +6,15 @@ import { QrService } from './qr.service';
 import { QrController } from './qr.controller';
 import { PlantsModule } from '../plants/plants.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { CartModule } from '../cart/cart.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([QrCode, QrScanLog]), PlantsModule, SubscriptionsModule],
+  imports: [
+    TypeOrmModule.forFeature([QrCode, QrScanLog]),
+    PlantsModule,
+    SubscriptionsModule,
+    CartModule,
+  ],
   controllers: [QrController],
   providers: [QrService],
   exports: [QrService],

@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Query,
+  Body,
   UseGuards,
   Request,
   Headers,
@@ -11,7 +12,9 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags, ApiQuery } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags, ApiQuery, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { FeatureGuard } from '../../common/guards/feature.guard';
 import { RequireFeature } from '../../common/decorators/require-feature.decorator';
 import { PlanFeature } from '../plans/entities/plan.entity';
@@ -29,6 +32,54 @@ interface PlantLabelData {
   petToxicity: string | null;
   qrCodeUrl: string;
   qrImageBase64: string;
+}
+
+class SellerQrScanDto {
+  @ApiPropertyOptional({
+    description: 'Raw QR code content (supports app code or URL value)',
+    example: 'https://your-frontend.com/plant/12',
+  })
+  @IsOptional()
+  @IsString()
+  code?: string;
+
+  @ApiPropertyOptional({
+    description: 'Product/plant identifier. Can be numeric id or URL.',
+    example: '12',
+  })
+  @IsOptional()
+  @IsString()
+  productId?: string;
+
+  @ApiPropertyOptional({ description: 'Specific variant ID to add', example: 27 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  variantId?: number;
+
+  @ApiPropertyOptional({ description: 'Quantity to add in cart', example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantity?: number;
+
+  @ApiPropertyOptional({
+    description: 'Optional scan location metadata',
+    example: 'Counter 1',
+  })
+  @IsOptional()
+  @IsString()
+  location?: string;
+
+  @ApiPropertyOptional({
+    description: 'Optional device metadata',
+    example: 'Android POS device',
+  })
+  @IsOptional()
+  @IsString()
+  device?: string;
 }
 
 @ApiTags('QR')
@@ -78,6 +129,31 @@ export class QrController {
     return this.qrService.scanById(productId, {
       scanLocation: location,
       deviceInfo: device,
+      ipAddress: ip,
+    });
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      'Seller QR scan (AUTH) — scan and add item directly to seller cart',
+  })
+  @UseGuards(AuthGuard('jwt'))
+  @Post('scan/seller')
+  scanForSeller(
+    @Body() body: SellerQrScanDto,
+    @Request() req: any,
+    @Headers('x-forwarded-for') ip?: string,
+  ) {
+    return this.qrService.scanForSeller({
+      code: body.code,
+      productId: body.productId,
+      variantId: body.variantId,
+      quantity: body.quantity,
+      scannedBy: req.user.userId,
+      organizationId: req.user.organizationId,
+      scanLocation: body.location,
+      deviceInfo: body.device,
       ipAddress: ip,
     });
   }

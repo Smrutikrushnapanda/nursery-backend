@@ -31,10 +31,10 @@ export class CreatePlantVariantDto {
   @Min(0)
   price: number;
 
-  @ApiProperty({ example: 'ROSE-MEDIUM-001' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ example: 'ROSE-MEDIUM-001', description: 'SKU will be auto-generated if not provided' })
+  @IsOptional()
   @IsString()
-  sku: string;
+  sku?: string;
 
   @ApiPropertyOptional({ example: 25.0, default: 0 })
   @Type(() => Number)

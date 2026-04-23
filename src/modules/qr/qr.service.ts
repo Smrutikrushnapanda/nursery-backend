@@ -1,7 +1,7 @@
 import {
   Injectable,
   NotFoundException,
-  ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
@@ -9,6 +9,8 @@ import * as QRCode from 'qrcode';
 import { QrCode } from './qr-code.entity';
 import { QrScanLog } from './scan-log.entity';
 import { Plant } from '../plants/plant.entity';
+import { PlantVariant } from '../plants/plant-variant.entity';
+import { CartService } from '../cart/cart.service';
 
 @Injectable()
 export class QrService {
@@ -19,7 +21,151 @@ export class QrService {
     private readonly scanLogRepo: Repository<QrScanLog>,
     @InjectRepository(Plant)
     private readonly plantRepo: Repository<Plant>,
+    @InjectRepository(PlantVariant)
+    private readonly variantRepo: Repository<PlantVariant>,
+    private readonly cartService: CartService,
   ) {}
+
+  private getPublicQrBaseUrl(): string {
+    const raw =
+      process.env.QR_PUBLIC_BASE_URL?.trim() ||
+      process.env.FRONTEND_URL?.trim() ||
+      'http://localhost:3000';
+
+    try {
+      const url = new URL(raw);
+      return url.toString().replace(/\/+$/, '');
+    } catch {
+      return 'http://localhost:3000';
+    }
+  }
+
+  private buildPlantQrUrl(plantId: number): string {
+    return `${this.getPublicQrBaseUrl()}/plant/${plantId}`;
+  }
+
+  private decodeInput(value: string): string {
+    try {
+      return decodeURIComponent(value).trim();
+    } catch {
+      return value.trim();
+    }
+  }
+
+  private extractPlantId(value: string): number | null {
+    const normalized = this.decodeInput(value);
+    const numeric = Number(normalized);
+    if (Number.isInteger(numeric) && numeric > 0) {
+      return numeric;
+    }
+
+    try {
+      const parsedUrl = new URL(normalized);
+
+      const queryId =
+        parsedUrl.searchParams.get('plantId') ||
+        parsedUrl.searchParams.get('productId') ||
+        parsedUrl.searchParams.get('id');
+
+      if (queryId) {
+        const parsedQueryId = Number(queryId);
+        if (Number.isInteger(parsedQueryId) && parsedQueryId > 0) {
+          return parsedQueryId;
+        }
+      }
+
+      const segments = parsedUrl.pathname
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => segment.toLowerCase());
+
+      for (let i = 0; i < segments.length - 1; i += 1) {
+        if (
+          ['plant', 'plants', 'product', 'products', 'p'].includes(segments[i])
+        ) {
+          const parsedSegmentId = Number(segments[i + 1]);
+          if (Number.isInteger(parsedSegmentId) && parsedSegmentId > 0) {
+            return parsedSegmentId;
+          }
+        }
+      }
+
+      const lastSegment = segments[segments.length - 1];
+      if (lastSegment) {
+        const parsedLast = Number(lastSegment);
+        if (Number.isInteger(parsedLast) && parsedLast > 0) {
+          return parsedLast;
+        }
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
+  }
+
+  private createScanMetadata(
+    metadata?: {
+      scannedBy?: string;
+      scanLocation?: string;
+      deviceInfo?: string;
+      ipAddress?: string;
+    },
+  ): DeepPartial<QrScanLog> {
+    return {
+      scannedBy: metadata?.scannedBy || undefined,
+      scanLocation: metadata?.scanLocation || undefined,
+      deviceInfo: metadata?.deviceInfo || undefined,
+      ipAddress: metadata?.ipAddress || undefined,
+    };
+  }
+
+  private async logScan(
+    payload: {
+      qrCode: string;
+      plantId: number;
+      organizationId: string;
+    },
+    metadata?: {
+      scannedBy?: string;
+      scanLocation?: string;
+      deviceInfo?: string;
+      ipAddress?: string;
+    },
+  ) {
+    const scanLog = this.scanLogRepo.create({
+      ...payload,
+      ...this.createScanMetadata(metadata),
+    });
+    await this.scanLogRepo.save(scanLog);
+  }
+
+  private async resolveVariantForCart(
+    plantId: number,
+    organizationId: string,
+    variantId?: number,
+  ): Promise<PlantVariant> {
+    if (variantId) {
+      const selected = await this.variantRepo.findOne({
+        where: { id: variantId, plantId, organizationId, status: true },
+      });
+      if (!selected) {
+        throw new BadRequestException('Selected variant is not valid for this plant');
+      }
+      return selected;
+    }
+
+    const firstActiveVariant = await this.variantRepo.findOne({
+      where: { plantId, organizationId, status: true },
+      order: { id: 'ASC' },
+    });
+
+    if (!firstActiveVariant) {
+      throw new BadRequestException('No active variant found for this plant');
+    }
+
+    return firstActiveVariant;
+  }
 
   async generate(plantId: number, organizationId: string) {
     const plant = await this.plantRepo.findOne({
@@ -29,10 +175,25 @@ export class QrService {
 
     if (!plant) throw new NotFoundException('Plant not found');
 
+    const code = this.buildPlantQrUrl(plantId);
     const existing = await this.qrRepo.findOne({ where: { plantId } });
-    if (existing) throw new ConflictException('QR code already exists for this plant');
+    if (existing) {
+      if (existing.code !== code) {
+        existing.code = code;
+        existing.qrImageBase64 = await QRCode.toDataURL(code);
+        await this.qrRepo.save(existing);
+      }
 
-    const code = `PLT-${organizationId.slice(0, 8)}-${plantId}-${Date.now()}`;
+      await this.plantRepo.update(plantId, { qrCodeUrl: code });
+
+      return {
+        code,
+        qrImageBase64: existing.qrImageBase64,
+        plantId,
+        id: existing.id,
+      };
+    }
+
     const qrImageBase64 = await QRCode.toDataURL(code);
 
     const qrCode = this.qrRepo.create({
@@ -56,28 +217,32 @@ export class QrService {
     deviceInfo?: string;
     ipAddress?: string;
   }) {
+    const normalizedCode = this.decodeInput(code);
     const qrCode = await this.qrRepo.findOne({
-      where: { code },
+      where: { code: normalizedCode },
       relations: ['plant', 'plant.category', 'plant.subcategory', 'plant.variants'],
     });
 
-    if (!qrCode) throw new NotFoundException('QR code not found');
+    if (!qrCode) {
+      const plantId = this.extractPlantId(normalizedCode);
+      if (plantId) {
+        return this.scanById(String(plantId), metadata);
+      }
+      throw new NotFoundException('QR code not found');
+    }
 
-    // Log the scan event
-    const scanLogData: DeepPartial<QrScanLog> = {
-      qrCode: code,
-      plantId: qrCode.plantId,
-      organizationId: qrCode.organizationId,
-      scannedBy: metadata?.scannedBy || undefined,
-      scanLocation: metadata?.scanLocation || undefined,
-      deviceInfo: metadata?.deviceInfo || undefined,
-      ipAddress: metadata?.ipAddress || undefined,
-    };
-    const scanLog = this.scanLogRepo.create(scanLogData);
-    await this.scanLogRepo.save(scanLog);
+    await this.logScan(
+      {
+        qrCode: qrCode.code,
+        plantId: qrCode.plantId,
+        organizationId: qrCode.organizationId,
+      },
+      metadata,
+    );
 
     return {
       code: qrCode.code,
+      id: qrCode.id,
       plant: qrCode.plant,
       scannedAt: new Date(),
     };
@@ -89,35 +254,34 @@ export class QrService {
     deviceInfo?: string;
     ipAddress?: string;
   }) {
+    const normalizedInput = this.decodeInput(productId);
+    const extractedPlantId = this.extractPlantId(normalizedInput);
+
     // Try to find plant by ID
     const plant = await this.plantRepo.findOne({
-      where: { id: +productId },
+      where: extractedPlantId ? { id: extractedPlantId } : { id: -1 },
       relations: ['category', 'subcategory', 'variants'],
     });
 
     if (!plant) {
       // Try to find by qrCodeUrl
       const qrCode = await this.qrRepo.findOne({
-        where: { code: productId },
+        where: { code: normalizedInput },
         relations: ['plant', 'plant.category', 'plant.subcategory', 'plant.variants'],
       });
-      
+
       if (!qrCode) {
         throw new NotFoundException('Product not found');
       }
-      
-      // Log the scan event
-      const scanLogData: DeepPartial<QrScanLog> = {
-        qrCode: qrCode.code,
-        plantId: qrCode.plantId,
-        organizationId: qrCode.organizationId,
-        scannedBy: metadata?.scannedBy || undefined,
-        scanLocation: metadata?.scanLocation || undefined,
-        deviceInfo: metadata?.deviceInfo || undefined,
-        ipAddress: metadata?.ipAddress || undefined,
-      };
-      const scanLog = this.scanLogRepo.create(scanLogData);
-      await this.scanLogRepo.save(scanLog);
+
+      await this.logScan(
+        {
+          qrCode: qrCode.code,
+          plantId: qrCode.plantId,
+          organizationId: qrCode.organizationId,
+        },
+        metadata,
+      );
 
       return {
         code: qrCode.code,
@@ -127,24 +291,90 @@ export class QrService {
       };
     }
 
-    // Log the scan event
-    const scanLogData: DeepPartial<QrScanLog> = {
-      qrCode: `ID-${productId}`,
-      plantId: plant.id,
-      organizationId: plant.organizationId,
-      scannedBy: metadata?.scannedBy || undefined,
-      scanLocation: metadata?.scanLocation || undefined,
-      deviceInfo: metadata?.deviceInfo || undefined,
-      ipAddress: metadata?.ipAddress || undefined,
-    };
-    const scanLog = this.scanLogRepo.create(scanLogData);
-    await this.scanLogRepo.save(scanLog);
+    await this.logScan(
+      {
+        qrCode: plant.qrCodeUrl || normalizedInput,
+        plantId: plant.id,
+        organizationId: plant.organizationId,
+      },
+      metadata,
+    );
 
     return {
-      code: plant.qrCodeUrl || `ID-${productId}`,
+      code: plant.qrCodeUrl || normalizedInput,
       id: plant.id,
       plant,
       scannedAt: new Date(),
+    };
+  }
+
+  async scanForSeller(input: {
+    code?: string;
+    productId?: string;
+    variantId?: number;
+    quantity?: number;
+    organizationId: string;
+    scannedBy: string;
+    scanLocation?: string;
+    deviceInfo?: string;
+    ipAddress?: string;
+  }) {
+    const quantity = input.quantity && input.quantity > 0 ? input.quantity : 1;
+
+    if (!input.code && !input.productId) {
+      throw new BadRequestException('code or productId is required');
+    }
+
+    const scanResult = input.code
+      ? await this.scan(input.code, {
+          scannedBy: input.scannedBy,
+          scanLocation: input.scanLocation,
+          deviceInfo: input.deviceInfo,
+          ipAddress: input.ipAddress,
+        })
+      : await this.scanById(input.productId!, {
+          scannedBy: input.scannedBy,
+          scanLocation: input.scanLocation,
+          deviceInfo: input.deviceInfo,
+          ipAddress: input.ipAddress,
+        });
+
+    const scannedPlant = scanResult.plant;
+    if (!scannedPlant) {
+      throw new NotFoundException('Scanned plant not found');
+    }
+
+    if (scannedPlant.organizationId !== input.organizationId) {
+      throw new BadRequestException(
+        'This QR code belongs to a different organization',
+      );
+    }
+
+    const variant = await this.resolveVariantForCart(
+      scannedPlant.id,
+      input.organizationId,
+      input.variantId,
+    );
+
+    const cart = await this.cartService.add(
+      {
+        variantId: variant.id,
+        quantity,
+      },
+      input.scannedBy,
+      input.organizationId,
+    );
+
+    return {
+      scan: scanResult,
+      addedVariant: {
+        id: variant.id,
+        size: variant.size,
+        sku: variant.sku,
+        price: Number(variant.price),
+      },
+      quantity,
+      cart,
     };
   }
 
@@ -213,7 +443,7 @@ export class QrService {
       }
 
       // Generate new QR code
-      const code = `PLT-${organizationId.slice(0, 8)}-${plant.id}-${Date.now()}`;
+      const code = this.buildPlantQrUrl(plant.id);
       const qrImageBase64 = await QRCode.toDataURL(code);
 
       const qrCode = this.qrRepo.create({

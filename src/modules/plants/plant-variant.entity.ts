@@ -10,6 +10,7 @@ import {
   UpdateDateColumn,
   Index,
   Unique,
+  ValueTransformer,
 } from 'typeorm';
 import { Plant } from './plant.entity';
 import { Organization } from '../organizations/entities/organization.entity';
@@ -23,6 +24,18 @@ export enum PlantVariantSize {
   LARGE = 'LARGE',
   EXTRA_LARGE = 'EXTRA_LARGE',
 }
+
+const decimalToNumberTransformer: ValueTransformer = {
+  to: (value: number | null) => value,
+  from: (value: string | number | null): number | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  },
+};
 
 @Entity('plant_variants')
 @Index('idx_plant_variants_organizationId', ['organizationId'])
@@ -46,19 +59,42 @@ export class PlantVariant {
   })
   size: PlantVariantSize;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    transformer: decimalToNumberTransformer,
+  })
   price: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    transformer: decimalToNumberTransformer,
+  })
   mockPrice: number | null;
 
   @Column({ length: 100 })
   sku: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    transformer: decimalToNumberTransformer,
+  })
   quantity: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    transformer: decimalToNumberTransformer,
+  })
   minQuantity: number;
 
   @Column({ nullable: true })

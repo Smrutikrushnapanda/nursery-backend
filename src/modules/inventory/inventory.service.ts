@@ -71,7 +71,7 @@ export class InventoryService {
   async getAllStock(organizationId: string) {
     return this.stockRepo.find({
       where: { organizationId },
-      relations: ['variant', 'variant.plant'],
+      relations: ['variant', 'variant.plant', 'variant.plant.category', 'variant.plant.subcategory'],
       order: { variantId: 'ASC' },
     });
   }

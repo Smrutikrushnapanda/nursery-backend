@@ -37,6 +37,20 @@ export class PlantVariantsService {
 
   async create(dto: CreatePlantVariantDto, orgId: string) {
     await this.ensurePlantBelongsToOrg(dto.plantId, orgId);
+
+    // Auto-generate SKU if not provided
+    if (!dto.sku) {
+      const count = await this.plantVariantRepo.count({
+        where: { organizationId: orgId },
+      });
+      const plant = await this.plantRepo.findOne({
+        where: { id: dto.plantId, organizationId: orgId },
+        select: { sku: true },
+      });
+      const plantSku = plant?.sku || 'PLT';
+      dto.sku = `${plantSku}-VAR-${String(count + 1).padStart(4, '0')}`;
+    }
+
     const variant = this.plantVariantRepo.create({ ...dto, organizationId: orgId });
 
     try {
