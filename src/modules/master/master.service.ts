@@ -233,25 +233,24 @@ export class MasterService implements OnModuleInit {
     await this.seedRegistrationSubCategories();
   }
 
-  private async validateParentMenuOwnership(
-    parentId: number,
-    organizationId: string,
-    currentMenuId?: number,
-  ) {
-    if (currentMenuId && parentId === currentMenuId) {
-      throw new BadRequestException('A menu cannot be its own parent.');
-    }
+   private async validateParentMenuOwnership(
+     parentId: number,
+     currentMenuId?: number,
+   ) {
+     if (currentMenuId && parentId === currentMenuId) {
+       throw new BadRequestException('A menu cannot be its own parent.');
+     }
 
-    const parent = await this.menuMasterRepository.findOne({
-      where: [{ id: parentId, organizationId }, { id: parentId, organizationId: IsNull() }],
-    });
+     const parent = await this.menuMasterRepository.findOne({
+       where: { id: parentId },
+     });
 
-    if (!parent) {
-      throw new NotFoundException(`Parent menu with ID ${parentId} not found`);
-    }
+     if (!parent) {
+       throw new NotFoundException(`Parent menu with ID ${parentId} not found`);
+     }
 
-    return parent;
-  }
+     return parent;
+   }
 
   async getBusinessTypes(): Promise<BusinessType[]> {
     return this.businessTypeRepository.find({
@@ -464,94 +463,75 @@ export class MasterService implements OnModuleInit {
     await this.subCategoryRepository.remove(subCategory);
   }
 
-  // Menu Master CRUD operations
-  async createMenuMaster(
-    createMenuMasterDto: CreateMenuMasterDto,
-    organizationId: string,
-  ): Promise<MenuMaster> {
-    if (createMenuMasterDto.parentId) {
-      await this.validateParentMenuOwnership(
-        createMenuMasterDto.parentId,
-        organizationId,
-      );
-    }
+   // Menu Master CRUD operations
+   async createMenuMaster(
+     createMenuMasterDto: CreateMenuMasterDto,
+   ): Promise<MenuMaster> {
+     if (createMenuMasterDto.parentId) {
+       await this.validateParentMenuOwnership(
+         createMenuMasterDto.parentId,
+       );
+     }
 
-    const menuMaster = this.menuMasterRepository.create({
-      ...createMenuMasterDto,
-      organizationId,
-    });
-    return this.menuMasterRepository.save(menuMaster);
-  }
+     const menuMaster = this.menuMasterRepository.create({
+       ...createMenuMasterDto,
+     });
+     return this.menuMasterRepository.save(menuMaster);
+   }
 
-  async getAllMenuMasters(organizationId?: string): Promise<MenuMaster[]> {
-    if (!organizationId) {
-      return this.menuMasterRepository.find({
-        where: { status: true },
-        order: { displayOrder: 'ASC', id: 'ASC' },
+   async getAllMenuMasters(): Promise<MenuMaster[]> {
+     return this.menuMasterRepository.find({
+       where: { status: true },
+       order: { displayOrder: 'ASC', id: 'ASC' },
+     });
+   }
+
+   async getMenuMasterById(
+     id: number,
+   ): Promise<MenuMaster> {
+     const menuMaster = await this.menuMasterRepository.findOne({
+       where: { id },
+     });
+     if (!menuMaster) {
+       throw new NotFoundException(`MenuMaster with ID ${id} not found`);
+     }
+     return menuMaster;
+   }
+
+    async getAccessibleMenuMasterById(
+      id: number,
+    ): Promise<MenuMaster> {
+      const menuMaster = await this.menuMasterRepository.findOne({
+        where: { id, status: true },
       });
+      if (!menuMaster) {
+        throw new NotFoundException(`MenuMaster with ID ${id} not found`);
+      }
+      return menuMaster;
     }
 
-    return this.menuMasterRepository.find({
-      where: [
-        { organizationId, status: true },
-        { organizationId: IsNull(), status: true },
-      ],
-      order: { displayOrder: 'ASC', id: 'ASC' },
-    });
-  }
+    async updateMenuMaster(
+      id: number,
+      updateMenuMasterDto: UpdateMenuMasterDto,
+    ): Promise<MenuMaster> {
+      const menuMaster = await this.getMenuMasterById(id);
 
-  async getMenuMasterById(
-    id: number,
-    organizationId: string,
-  ): Promise<MenuMaster> {
-    const menuMaster = await this.menuMasterRepository.findOne({
-      where: { id, organizationId },
-    });
-    if (!menuMaster) {
-      throw new NotFoundException(`MenuMaster with ID ${id} not found`);
-    }
-    return menuMaster;
-  }
+      if (updateMenuMasterDto.parentId) {
+        await this.validateParentMenuOwnership(
+          updateMenuMasterDto.parentId,
+          id,
+        );
+      }
 
-  async getAccessibleMenuMasterById(
-    id: number,
-    organizationId?: string,
-  ): Promise<MenuMaster> {
-    const where = organizationId
-      ? [{ id, organizationId }, { id, organizationId: IsNull(), status: true }]
-      : { id, status: true };
-
-    const menuMaster = await this.menuMasterRepository.findOne({ where });
-    if (!menuMaster) {
-      throw new NotFoundException(`MenuMaster with ID ${id} not found`);
-    }
-    return menuMaster;
-  }
-
-  async updateMenuMaster(
-    id: number,
-    updateMenuMasterDto: UpdateMenuMasterDto,
-    organizationId: string,
-  ): Promise<MenuMaster> {
-    const menuMaster = await this.getMenuMasterById(id, organizationId);
-
-    if (updateMenuMasterDto.parentId) {
-      await this.validateParentMenuOwnership(
-        updateMenuMasterDto.parentId,
-        organizationId,
-        id,
+      const updatedMenuMaster = this.menuMasterRepository.merge(
+        menuMaster,
+        updateMenuMasterDto,
       );
+      return this.menuMasterRepository.save(updatedMenuMaster);
     }
 
-    const updatedMenuMaster = this.menuMasterRepository.merge(
-      menuMaster,
-      updateMenuMasterDto,
-    );
-    return this.menuMasterRepository.save(updatedMenuMaster);
-  }
-
-  async deleteMenuMaster(id: number, organizationId: string): Promise<void> {
-    const menuMaster = await this.getMenuMasterById(id, organizationId);
-    await this.menuMasterRepository.remove(menuMaster);
-  }
+    async deleteMenuMaster(id: number): Promise<void> {
+      const menuMaster = await this.getMenuMasterById(id);
+      await this.menuMasterRepository.remove(menuMaster);
+    }
 }

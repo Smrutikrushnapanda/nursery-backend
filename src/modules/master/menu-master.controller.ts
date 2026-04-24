@@ -18,7 +18,6 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
-import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 import { MasterService } from './master.service';
 import { CreateMenuMasterDto } from './dto/create-menu-master.dto';
 import { UpdateMenuMasterDto } from './dto/update-menu-master.dto';
@@ -40,9 +39,8 @@ export class MenuMasterController {
   })
   async createMenuMaster(
     @Body() createMenuMasterDto: CreateMenuMasterDto,
-    @CurrentOrganization() orgId: string,
   ): Promise<MenuMaster> {
-    return this.masterService.createMenuMaster(createMenuMasterDto, orgId);
+    return this.masterService.createMenuMaster(createMenuMasterDto);
   }
 
   @Get('menus')
@@ -53,10 +51,8 @@ export class MenuMasterController {
     description: 'Returns all menus',
     type: [MenuMaster],
   })
-  async getAllMenuMasters(
-    @CurrentOrganization() orgId?: string,
-  ): Promise<MenuMaster[]> {
-    return this.masterService.getAllMenuMasters(orgId);
+  async getAllMenuMasters(): Promise<MenuMaster[]> {
+    return this.masterService.getAllMenuMasters();
   }
 
   @Get('menus/:id')
@@ -77,9 +73,8 @@ export class MenuMasterController {
   })
   async getMenuMasterById(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentOrganization() orgId?: string,
   ): Promise<MenuMaster> {
-    return this.masterService.getAccessibleMenuMasterById(id, orgId);
+    return this.masterService.getAccessibleMenuMasterById(id);
   }
 
   @Put('menus/:id')
@@ -102,9 +97,8 @@ export class MenuMasterController {
   async updateMenuMaster(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateMenuMasterDto: UpdateMenuMasterDto,
-    @CurrentOrganization() orgId: string,
   ): Promise<MenuMaster> {
-    return this.masterService.updateMenuMaster(id, updateMenuMasterDto, orgId);
+    return this.masterService.updateMenuMaster(id, updateMenuMasterDto);
   }
 
   @Delete('menus/:id')
@@ -125,8 +119,7 @@ export class MenuMasterController {
   })
   async deleteMenuMaster(
     @Param('id', ParseIntPipe) id: number,
-    @CurrentOrganization() orgId: string,
   ): Promise<void> {
-    return this.masterService.deleteMenuMaster(id, orgId);
+    return this.masterService.deleteMenuMaster(id);
   }
 }
