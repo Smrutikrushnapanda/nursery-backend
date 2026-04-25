@@ -18,7 +18,6 @@ import { RegistrationCategory } from './registration-category.entity';
 import { RegistrationSubCategory } from './registration-subcategory.entity';
 import { PlanMenuAccess } from './plan-menu-access.entity';
 import { Subscription, SubscriptionStatus } from '../subscriptions/entities/subscription.entity';
-import { Plan, PlanName } from '../plans/entities/plan.entity';
 
 const DEFAULT_REGISTRATION_CATEGORIES = [
   { id: 1, name: 'Agriculture' },
@@ -49,12 +48,6 @@ type MenuAccessLookup = {
   subscriptionId?: string;
 };
 
-const DEFAULT_PLAN_MENU_ACCESS: Record<PlanName, string[]> = {
-  [PlanName.BASIC]: ['Master', 'Inventory', 'Report', 'Log Report'],
-  [PlanName.STANDARD]: ['Master', 'Workflow', 'Inventory', 'Payment', 'Report', 'Sales', 'Log Report'],
-  [PlanName.PREMIUM]: ['Master', 'Workflow', 'Inventory', 'Payment', 'Qr View', 'Report', 'Sales', 'Log Report'],
-};
-
 @Injectable()
 export class MasterService implements OnModuleInit {
   constructor(
@@ -70,8 +63,6 @@ export class MasterService implements OnModuleInit {
     private readonly planMenuAccessRepository: Repository<PlanMenuAccess>,
     @InjectRepository(Subscription)
     private readonly subscriptionRepository: Repository<Subscription>,
-    @InjectRepository(Plan)
-    private readonly planRepository: Repository<Plan>,
     @InjectRepository(RegistrationCategory)
     private readonly registrationCategoryRepository: Repository<RegistrationCategory>,
     @InjectRepository(RegistrationSubCategory)
@@ -80,7 +71,6 @@ export class MasterService implements OnModuleInit {
 
   async onModuleInit() {
     await this.seedBusinessTypes();
-    await this.seedPlanMenuAccess();
   }
 
   private async seedBusinessTypes() {
@@ -252,58 +242,6 @@ export class MasterService implements OnModuleInit {
   private async ensureRegistrationMasterData() {
     await this.seedRegistrationCategories();
     await this.seedRegistrationSubCategories();
-  }
-
-  private async seedPlanMenuAccess() {
-    const existingCount = await this.planMenuAccessRepository.count();
-    if (existingCount > 0) {
-      return;
-    }
-
-    const [plans, menus] = await Promise.all([
-      this.planRepository.find(),
-      this.menuMasterRepository.find(),
-    ]);
-
-    if (plans.length === 0 || menus.length === 0) {
-      return;
-    }
-
-    const menuByName = new Map(
-      menus.map((menu) => [menu.menuName.trim().toLowerCase(), menu]),
-    );
-
-    const accessRecords: PlanMenuAccess[] = [];
-
-    for (const plan of plans) {
-      const allowedMenuNames = DEFAULT_PLAN_MENU_ACCESS[plan.name];
-      if (!allowedMenuNames) {
-        continue;
-      }
-
-      const seenMenuIds = new Set<number>();
-
-      for (const menuName of allowedMenuNames) {
-        const menu = menuByName.get(menuName.trim().toLowerCase());
-        if (!menu || seenMenuIds.has(menu.id)) {
-          continue;
-        }
-
-        seenMenuIds.add(menu.id);
-
-        accessRecords.push(
-          this.planMenuAccessRepository.create({
-            planId: plan.id,
-            menuId: menu.id,
-            status: true,
-          }),
-        );
-      }
-    }
-
-    if (accessRecords.length > 0) {
-      await this.planMenuAccessRepository.save(accessRecords);
-    }
   }
 
   private async resolvePlanIdForMenus({
