@@ -114,6 +114,30 @@ export class InvoiceService {
       doc.moveTo(50, rowY + 5).lineTo(545, rowY + 5).strokeColor('#cccccc').stroke();
       rowY += 15;
 
+      const subtotalAmount = order.items.reduce(
+        (sum, item) => sum + Number(item.totalPrice),
+        0,
+      );
+      const discountAmount =
+        order.discountType === 'percentage'
+          ? (subtotalAmount * Math.min(Number(order.discount ?? 0), 100)) / 100
+          : Math.min(Number(order.discount ?? 0), subtotalAmount);
+
+      doc.fontSize(11).font('Helvetica')
+        .text('Subtotal:', col.price, rowY, { width: 70, align: 'right' })
+        .text(`₹${subtotalAmount.toFixed(2)}`, col.total, rowY);
+      rowY += 18;
+
+      if (discountAmount > 0) {
+        const discountLabel =
+          order.discountType === 'percentage'
+            ? `Discount (${Number(order.discount ?? 0).toFixed(2)}%)`
+            : 'Discount';
+        doc.text(`${discountLabel}:`, col.price, rowY, { width: 70, align: 'right' })
+          .text(`-₹${discountAmount.toFixed(2)}`, col.total, rowY);
+        rowY += 18;
+      }
+
       doc.fontSize(12).font('Helvetica-Bold')
         .text('Total Amount:', col.price, rowY, { width: 70, align: 'right' })
         .text(`₹${Number(order.totalAmount).toFixed(2)}`, col.total, rowY);

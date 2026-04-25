@@ -1,5 +1,6 @@
 import {
   Body,
+  Query,
   Controller,
   Get,
   Param,
@@ -10,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags, ApiQuery } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -36,6 +37,15 @@ class CheckoutDto {
   @ApiPropertyOptional({ example: 'customer@example.com' })
   @IsOptional() @IsString()
   customerEmail?: string;
+
+  @ApiPropertyOptional({ example: 100, description: 'Discount value. Use with discountType.' })
+  @IsOptional()
+  discount?: number;
+
+  @ApiPropertyOptional({ example: 'fixed', description: 'fixed or percentage' })
+  @IsOptional()
+  @IsString()
+  discountType?: 'fixed' | 'percentage';
 }
 
 @ApiTags('Orders')
@@ -56,6 +66,8 @@ export class OrdersController {
       body.customerName,
       body.customerPhone,
       body.customerEmail,
+      body.discount,
+      body.discountType,
     );
   }
 
@@ -66,9 +78,19 @@ export class OrdersController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all orders' })
-  findAll(@Request() req: any) {
-    return this.ordersService.findAll(req.user.organizationId);
+  @ApiOperation({ summary: 'Get all orders with pagination' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  findAll(
+    @Request() req: any,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.ordersService.findAll(
+      req.user.organizationId,
+      page ? Number(page) : 1,
+      limit ? Number(limit) : 50,
+    );
   }
 
   @Get(':id')

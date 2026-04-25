@@ -27,8 +27,13 @@ export class CategoriesService {
     };
   }
 
-  async findAll(organizationId?: string) {
+  async findAll(organizationId?: string, page?: number, limit?: number) {
     let categories: Category[];
+
+    // If pagination is requested
+    if (page !== undefined || limit !== undefined) {
+      return this.findAllPaginated(organizationId, page, limit);
+    }
 
     if (!organizationId) {
       categories = await this.categoryRepository.find({
@@ -49,6 +54,45 @@ export class CategoriesService {
       success: true,
       message: 'Categories fetched successfully',
       data: categories,
+    };
+  }
+
+  async findAllPaginated(organizationId?: string, pageNum: number = 1, limitNum: number = 50) {
+    // Ensure page and limit are valid
+    pageNum = Math.max(1, pageNum);
+    limitNum = Math.min(500, Math.max(1, limitNum));
+
+    let [categories, total]: [Category[], number] = [[], 0];
+
+    if (!organizationId) {
+      [categories, total] = await this.categoryRepository.findAndCount({
+        where: { status: true },
+        order: { id: 'ASC' },
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
+      });
+    } else {
+      [categories, total] = await this.categoryRepository.findAndCount({
+        where: [
+          { organizationId, status: true },
+          { organizationId: IsNull(), status: true },
+        ],
+        order: { id: 'ASC' },
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Categories fetched successfully',
+      data: categories,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
     };
   }
 

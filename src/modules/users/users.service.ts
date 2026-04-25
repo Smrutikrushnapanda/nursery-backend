@@ -34,9 +34,28 @@ export class UsersService {
     return result;
   }
 
-  async findAll(organizationId: string): Promise<Omit<User, 'passwordHash'>[]> {
-    const users = await this.userRepo.find({ where: { organizationId } });
-    return users.map(({ passwordHash: _, ...u }) => u);
+  async findAll(organizationId: string, page: number = 1, limit: number = 50): Promise<any> {
+    // Ensure page and limit are valid
+    page = Math.max(1, page);
+    limit = Math.min(500, Math.max(1, limit));
+
+    const [users, total] = await this.userRepo.findAndCount({
+      where: { organizationId },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    const sanitizedUsers = users.map(({ passwordHash: _, ...u }) => u);
+
+    return {
+      data: sanitizedUsers,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async update(id: string, dto: UpdateUserDto, organizationId: string): Promise<Omit<User, 'passwordHash'>> {

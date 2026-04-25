@@ -37,16 +37,24 @@ export class PlantVariantsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get All Plant Variants' })
+  @ApiOperation({ summary: 'Get All Plant Variants with pagination' })
   @ApiQuery({
     name: 'plantId',
     required: false,
     description: 'Filter variants by plant id',
   })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
   findAll(
     @CurrentOrganization() orgId: string | undefined,
     @Query('plantId') plantId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
+    // Check if pagination is requested
+    if (page !== undefined || limit !== undefined) {
+      return this.service.findAll(orgId, page ? Number(page) : 1, limit ? Number(limit) : 50);
+    }
     return this.service.findAll(orgId, this.parseOptionalPlantId(plantId));
   }
 

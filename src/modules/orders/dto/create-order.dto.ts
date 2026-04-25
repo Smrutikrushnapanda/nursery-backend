@@ -9,6 +9,8 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  IsNumber,
+  IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethod } from '../../payments/entities/payment.entity';
@@ -58,4 +60,15 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   customerEmail?: string;
+
+  @ApiPropertyOptional({ example: 100, description: 'Discount amount (fixed) or percentage value' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  discount?: number;
+
+  @ApiPropertyOptional({ example: 'fixed', description: 'Discount type: "fixed" for fixed amount or "percentage" for percentage' })
+  @IsOptional()
+  @IsIn(['fixed', 'percentage'])
+  discountType?: 'fixed' | 'percentage';
 }

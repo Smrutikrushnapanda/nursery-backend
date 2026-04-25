@@ -61,7 +61,18 @@ export class PlantVariantsService {
     }
   }
 
-  async findAll(orgId: string | undefined, plantId?: number) {
+  async findAll(orgId: string | undefined, plantIdOrPage?: number | string, pageOrUndefined?: number, limit?: number) {
+    // Check if pagination is being used
+    const isPageination = typeof plantIdOrPage === 'number' && !isNaN(plantIdOrPage as number) && (pageOrUndefined !== undefined || limit !== undefined);
+    
+    if (isPageination) {
+      // New API: findAll(orgId, page, limit)
+      return this.findAllPaginated(orgId, plantIdOrPage as number, pageOrUndefined || 50);
+    }
+
+    // Original API: findAll(orgId, plantId?)
+    const plantId = typeof plantIdOrPage === 'number' ? plantIdOrPage : undefined;
+
     const query = this.plantVariantRepo
       .createQueryBuilder('variant')
       .innerJoinAndSelect('variant.plant', 'plant', 'plant.status = :plantStatus', { plantStatus: true })
@@ -82,6 +93,40 @@ export class PlantVariantsService {
 
     const variants = await query.getMany();
     return this.enrichVariantsWithStockStatus(variants);
+  }
+
+  async findAllPaginated(orgId: string | undefined, pageNum: number = 1, limitNum: number = 50) {
+    // Ensure page and limit are valid
+    pageNum = Math.max(1, pageNum);
+    limitNum = Math.min(500, Math.max(1, limitNum));
+
+    const query = this.plantVariantRepo
+      .createQueryBuilder('variant')
+      .innerJoinAndSelect('variant.plant', 'plant', 'plant.status = :plantStatus', { plantStatus: true })
+      .leftJoinAndSelect('variant.stock', 'stock')
+      .where('variant.status = :variantStatus', { variantStatus: true })
+      .orderBy('variant.createdAt', 'DESC');
+
+    if (orgId) {
+      query.andWhere('variant.organizationId = :orgId', { orgId });
+    }
+
+    const [variants, total] = await query
+      .skip((pageNum - 1) * limitNum)
+      .take(limitNum)
+      .getManyAndCount();
+
+    const enrichedVariants = this.enrichVariantsWithStockStatus(variants);
+
+    return {
+      data: enrichedVariants,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    };
   }
 
   async findOne(id: number, orgId: string | undefined) {

@@ -43,6 +43,12 @@ export class Order {
   @Column({ name: 'total_amount', type: 'decimal', precision: 10, scale: 2 })
   totalAmount: number;
 
+  @Column({ name: 'discount', type: 'decimal', precision: 10, scale: 2, default: 0, nullable: true })
+  discount: number;
+
+  @Column({ name: 'discount_type', type: 'varchar', length: 10, default: 'fixed', nullable: true })
+  discountType: 'fixed' | 'percentage';
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

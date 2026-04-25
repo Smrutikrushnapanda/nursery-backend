@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Param, Patch, Delete, UseGuards, Query } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -23,10 +23,16 @@ export class CategoriesController {
 
   @Get()
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Get all active categories for the organization', description: 'Retrieve all active (status=true) categories for the current organization' })
+  @ApiOperation({ summary: 'Get all active categories for the organization with pagination', description: 'Retrieve all active (status=true) categories for the current organization' })
   @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })
-  findAll(@CurrentOrganization() orgId?: string) {
-    return this.service.findAll(orgId);
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  findAll(
+    @CurrentOrganization() orgId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.service.findAll(orgId, page ? Number(page) : undefined, limit ? Number(limit) : undefined);
   }
 
   @Get(':id')

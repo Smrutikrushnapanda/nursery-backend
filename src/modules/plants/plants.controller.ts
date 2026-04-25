@@ -124,16 +124,24 @@ export class PlantsController {
     return this.service.create(dto, orgId, imageFiles ?? []);
   }
 
-  @Get()
+@Get()
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get All Plants', description: 'Get all plants. Optionally filter by categoryId or subcategoryId using query parameters.' })
   @ApiQuery({ name: 'categoryId', required: false, description: 'Filter by category ID', type: Number })
   @ApiQuery({ name: 'subcategoryId', required: false, description: 'Filter by subcategory ID', type: Number })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
   findAll(
     @CurrentOrganization() orgId: string | undefined,
     @Query('categoryId') categoryId?: string,
     @Query('subcategoryId') subcategoryId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
+    // Check if pagination query params are present
+    if (page !== undefined || limit !== undefined) {
+      return this.service.findAll(orgId, page ? Number(page) : 1, limit ? Number(limit) : 50);
+    }
     return this.service.findAll(orgId, categoryId, subcategoryId);
   }
 

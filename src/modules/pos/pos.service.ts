@@ -20,6 +20,8 @@ export class QuickOrderDto {
   customerName?: string;
   customerPhone?: string;
   customerEmail?: string;
+  discount?: number;
+  discountType?: 'fixed' | 'percentage';
 }
 
 @Injectable()
@@ -82,6 +84,9 @@ export class PosService {
         paymentReference: dto.paymentReference,
         customerName: dto.customerName,
         customerPhone: dto.customerPhone,
+        customerEmail: dto.customerEmail,
+        discount: dto.discount,
+        discountType: dto.discountType,
       },
       organizationId,
     );
@@ -100,6 +105,10 @@ export class PosService {
     return {
       orderId: result.order.id,
       totalAmount: Number(result.order.totalAmount),
+      subtotalAmount: Number(result.summary?.subtotalAmount ?? result.order.totalAmount),
+      discountAmount: Number(result.summary?.discountAmount ?? 0),
+      discount: Number(result.order.discount ?? 0),
+      discountType: result.order.discountType ?? 'fixed',
       paymentMethod: result.payment.method,
       status: result.order.status,
       invoiceUrl: result.payment.invoiceUrl ?? null,

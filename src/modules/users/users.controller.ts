@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -13,6 +14,7 @@ import {
   ApiOperation,
   ApiParam,
   ApiResponse,
+  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -45,10 +47,16 @@ export class UsersController {
 
   @Get()
   @Roles(UserRole.OWNER, UserRole.MANAGER)
-  @ApiOperation({ summary: 'Get all users for the current organization' })
+  @ApiOperation({ summary: 'Get all users for the current organization with pagination' })
   @ApiResponse({ status: 200, description: 'Users fetched successfully' })
-  findAll(@CurrentOrganization() orgId: string) {
-    return this.usersService.findAll(orgId);
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  findAll(
+    @CurrentOrganization() orgId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.usersService.findAll(orgId, page ? Number(page) : 1, limit ? Number(limit) : 50);
   }
 
   @Patch(':id')

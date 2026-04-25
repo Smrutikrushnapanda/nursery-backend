@@ -65,12 +65,12 @@ export class OrdersService {
         }
       }
 
-      let totalAmount = 0;
+      let subtotalAmount = 0;
       const orderItems = dto.items.map((itemDto) => {
         const variant = variantMap.get(itemDto.variantId)!;
         const unitPrice = Number(variant.price);
         const totalPrice = unitPrice * itemDto.quantity;
-        totalAmount += totalPrice;
+        subtotalAmount += totalPrice;
 
         return manager.getRepository(OrderItem).create({
           variantId: itemDto.variantId,
@@ -80,11 +80,16 @@ export class OrdersService {
         });
       });
 
+      const { discountValue, discountType, discountAmount, finalTotal } =
+        this.calculateDiscountTotals(subtotalAmount, dto.discount, dto.discountType);
+
       const order = manager.getRepository(Order).create({
         organizationId,
         customerName: dto.customerName,
         customerPhone: dto.customerPhone,
-        totalAmount,
+        totalAmount: finalTotal,
+        discount: discountValue,
+        discountType,
         status: OrderStatus.CONFIRMED,
         items: orderItems,
       });
@@ -112,13 +117,21 @@ export class OrdersService {
         orderId: savedOrder.id,
         organizationId,
         method: dto.paymentMethod,
-        amount: totalAmount,
+        amount: finalTotal,
         ...(dto.paymentReference ? { referenceNumber: dto.paymentReference } : {}),
         status: PaymentStatus.COMPLETED,
       });
       const savedPayment = await manager.getRepository(Payment).save(payment);
 
-      return { order: savedOrder, payment: savedPayment };
+      return {
+        order: savedOrder,
+        payment: savedPayment,
+        summary: {
+          subtotalAmount: Number(subtotalAmount.toFixed(2)),
+          discountAmount,
+          totalAmount: finalTotal,
+        },
+      };
     });
 
     // Fire-and-forget invoice (non-blocking — never delays response)
@@ -135,6 +148,8 @@ export class OrdersService {
     customerName?: string,
     customerPhone?: string,
     customerEmail?: string,
+    discount?: number,
+    discountType?: 'fixed' | 'percentage',
   ) {
     const cartItems = await this.cartRepo.find({
       where: { userId, organizationId },
@@ -150,6 +165,8 @@ export class OrdersService {
       customerName,
       customerPhone,
       customerEmail,
+      discount,
+      discountType,
     };
 
     const result = await this.create(dto, organizationId);
@@ -167,12 +184,28 @@ export class OrdersService {
     return order;
   }
 
-  async findAll(organizationId: string) {
-    return this.orderRepo.find({
+  async findAll(organizationId: string, page: number = 1, limit: number = 50) {
+    // Ensure page and limit are valid
+    page = Math.max(1, page);
+    limit = Math.min(500, Math.max(1, limit));
+
+    const [data, total] = await this.orderRepo.findAndCount({
       where: { organizationId },
       relations: ['items', 'items.variant', 'payment'],
       order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
   }
 
   async cancel(id: number, organizationId: string) {
@@ -194,5 +227,35 @@ export class OrdersService {
     if (!org) return;
     const invoiceUrl = await this.invoiceService.generateAndSend(order, payment, org, customerEmail);
     payment.invoiceUrl = invoiceUrl;
+  }
+
+  private calculateDiscountTotals(
+    subtotalAmount: number,
+    discount?: number,
+    discountType?: 'fixed' | 'percentage',
+  ) {
+    const normalizedSubtotal = Number(subtotalAmount.toFixed(2));
+    const normalizedDiscountValue = Math.max(0, Number(discount ?? 0));
+    const normalizedDiscountType: 'fixed' | 'percentage' =
+      discountType === 'percentage' ? 'percentage' : 'fixed';
+
+    let discountAmount = 0;
+    if (normalizedDiscountValue > 0) {
+      if (normalizedDiscountType === 'percentage') {
+        const boundedPercentage = Math.min(normalizedDiscountValue, 100);
+        discountAmount = (normalizedSubtotal * boundedPercentage) / 100;
+      } else {
+        discountAmount = Math.min(normalizedDiscountValue, normalizedSubtotal);
+      }
+    }
+
+    const finalTotal = Math.max(0, normalizedSubtotal - discountAmount);
+
+    return {
+      discountValue: Number(normalizedDiscountValue.toFixed(2)),
+      discountType: normalizedDiscountType,
+      discountAmount: Number(discountAmount.toFixed(2)),
+      finalTotal: Number(finalTotal.toFixed(2)),
+    };
   }
 }

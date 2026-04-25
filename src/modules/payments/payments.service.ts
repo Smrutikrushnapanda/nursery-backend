@@ -72,7 +72,6 @@ export class PaymentsService {
       relations: ['items', 'items.variant', 'items.variant.plant'],
     });
     const org = await this.orgRepo.findOne({ where: { id: organizationId } });
-
     if (fullOrder && org) {
       const invoiceUrl = await this.invoiceService.generateAndSend(
         fullOrder,
@@ -107,11 +106,27 @@ export class PaymentsService {
     return payment;
   }
 
-  async findAll(organizationId: string) {
-    return this.paymentRepo.find({
+  async findAll(organizationId: string, page: number = 1, limit: number = 50) {
+    // Ensure page and limit are valid
+    page = Math.max(1, page);
+    limit = Math.min(500, Math.max(1, limit));
+
+    const [data, total] = await this.paymentRepo.findAndCount({
       where: { organizationId },
       relations: ['order'],
       order: { createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
     });
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
   }
 }

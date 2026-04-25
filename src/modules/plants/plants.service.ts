@@ -109,9 +109,23 @@ export class PlantsService {
 
   async findAll(
     orgId: string | undefined,
-    categoryId?: string,
-    subcategoryId?: string,
+    categoryIdOrPage?: string | number,
+    subcategoryIdOrLimit?: string | number,
+    page?: number,
+    limit?: number,
   ) {
+    // Check if pagination is being used (when page and limit are provided)
+    if (typeof categoryIdOrPage === 'number' || typeof subcategoryIdOrLimit === 'number') {
+      // New pagination API: findAll(orgId, page, limit)
+      const pageNum = (categoryIdOrPage as number) || 1;
+      const limitNum = (subcategoryIdOrLimit as number) || 50;
+      return this.findAllPaginated(orgId, pageNum, limitNum);
+    }
+
+    // Original API: findAll(orgId, categoryId, subcategoryId)
+    const categoryId = categoryIdOrPage as string | undefined;
+    const subcategoryId = subcategoryIdOrLimit as string | undefined;
+
     const query = this.plantRepo
       .createQueryBuilder('plant')
       .leftJoinAndSelect('plant.category', 'category')
@@ -148,6 +162,50 @@ export class PlantsService {
 
     // Enrich variants with computed stock status
     return this.enrichPlantsWithStockStatus(plants);
+  }
+
+  async findAllPaginated(
+    orgId: string | undefined,
+    pageNum: number = 1,
+    limitNum: number = 50,
+  ) {
+    // Ensure page and limit are valid
+    pageNum = Math.max(1, pageNum);
+    limitNum = Math.min(500, Math.max(1, limitNum));
+
+    const query = this.plantRepo
+      .createQueryBuilder('plant')
+      .leftJoinAndSelect('plant.category', 'category')
+      .leftJoinAndSelect('plant.subcategory', 'subcategory')
+      .leftJoinAndSelect(
+        'plant.variants',
+        'variant',
+        'variant.status = :variantStatus',
+        { variantStatus: true },
+      )
+      .leftJoinAndSelect('variant.stock', 'stock')
+      .leftJoinAndSelect('plant.images', 'image')
+      .where(orgId ? 'plant.organizationId = :orgId' : '1=1', { orgId })
+      .andWhere('plant.status = :plantStatus', { plantStatus: true });
+
+    const [plants, total] = await query
+      .orderBy('plant.createdAt', 'DESC')
+      .addOrderBy('image.displayOrder', 'ASC')
+      .skip((pageNum - 1) * limitNum)
+      .take(limitNum)
+      .getManyAndCount();
+
+    const enrichedPlants = this.enrichPlantsWithStockStatus(plants);
+
+    return {
+      data: enrichedPlants,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    };
   }
 
   async findOne(id: number, orgId: string | undefined) {
