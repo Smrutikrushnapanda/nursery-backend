@@ -9,6 +9,9 @@ import { SubCategory } from './subcategory.entity';
 import { MenuMaster } from './menu-master.entity';
 import { RegistrationCategory } from './registration-category.entity';
 import { RegistrationSubCategory } from './registration-subcategory.entity';
+import { PlanMenuAccess } from './plan-menu-access.entity';
+import { Subscription } from '../subscriptions/entities/subscription.entity';
+import { Plan } from '../plans/entities/plan.entity';
 
 @Module({
   imports: [
@@ -17,6 +20,9 @@ import { RegistrationSubCategory } from './registration-subcategory.entity';
       Category,
       SubCategory,
       MenuMaster,
+      PlanMenuAccess,
+      Subscription,
+      Plan,
       RegistrationCategory,
       RegistrationSubCategory,
     ]),

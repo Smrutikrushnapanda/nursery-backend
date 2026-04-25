@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -7,6 +8,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -22,6 +24,7 @@ import { MasterService } from './master.service';
 import { CreateMenuMasterDto } from './dto/create-menu-master.dto';
 import { UpdateMenuMasterDto } from './dto/update-menu-master.dto';
 import { MenuMaster } from './menu-master.entity';
+import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 
 @ApiTags('Master - Menus')
 @Controller('master')
@@ -46,13 +49,24 @@ export class MenuMasterController {
   @Get('menus')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get all menus' })
+  @ApiBearerAuth()
   @ApiResponse({
     status: 200,
     description: 'Returns all menus',
     type: [MenuMaster],
   })
-  async getAllMenuMasters(): Promise<MenuMaster[]> {
-    return this.masterService.getAllMenuMasters();
+  async getAllMenuMasters(
+    @CurrentOrganization() orgId?: string,
+    @Query('subscriptionId') subscriptionId?: string,
+  ): Promise<MenuMaster[]> {
+    if (subscriptionId !== undefined && !subscriptionId.trim()) {
+      throw new BadRequestException('subscriptionId cannot be empty');
+    }
+
+    return this.masterService.getAllMenuMasters({
+      organizationId: orgId,
+      subscriptionId: subscriptionId?.trim(),
+    });
   }
 
   @Get('menus/:id')
