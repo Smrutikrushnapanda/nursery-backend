@@ -82,19 +82,34 @@ class SellerQrScanDto {
   device?: string;
 }
 
+class GenerateQrDto {
+  @ApiPropertyOptional({ description: 'Specific variant ID to generate QR for', example: 27 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  variantId?: number;
+}
+
 @ApiTags('QR')
 @Controller('qr')
 export class QrController {
   constructor(private readonly qrService: QrService) {}
 
+
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Generate QR code for a plant' })
-  @ApiParam({ name: 'plantId', type: Number })
+  @ApiOperation({ summary: 'Generate QR code for a specific plant variant (Small / Medium / Large …)' })
+  @ApiParam({ name: 'plantId', type: Number, description: 'Plant ID' })
+  @ApiParam({ name: 'variantId', type: Number, description: 'Plant Variant ID' })
   @UseGuards(AuthGuard('jwt'), FeatureGuard)
   @RequireFeature(PlanFeature.QR)
-  @Post('generate/:plantId')
-  generate(@Param('plantId') plantId: string, @Request() req: any) {
-    return this.qrService.generate(+plantId, req.user.organizationId);
+  @Post('generate/:plantId/:variantId')
+  generateForVariant(
+    @Param('plantId') plantId: string,
+    @Param('variantId') variantId: string,
+    @Request() req: any,
+  ) {
+    return this.qrService.generate(+plantId, req.user.organizationId, +variantId);
   }
 
   @ApiOperation({ summary: 'Scan QR code — returns plant data (PUBLIC, no auth)' })
@@ -177,7 +192,7 @@ export class QrController {
   }
 
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Generate printable label for a plant' })
+  @ApiOperation({ summary: 'Generate printable label for a plant (generic)' })
   @ApiParam({ name: 'plantId', type: Number })
   @UseGuards(AuthGuard('jwt'), FeatureGuard)
   @RequireFeature(PlanFeature.QR)
@@ -203,6 +218,42 @@ export class QrController {
           : null,
         season: plant.season,
         sku: plant.sku,
+        qrCodeUrl: qrData.code,
+        qrImageBase64: qrData.qrImageBase64,
+      },
+    };
+  }
+
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Generate printable label for a specific plant variant' })
+  @ApiParam({ name: 'plantId', type: Number })
+  @ApiParam({ name: 'variantId', type: Number, description: 'Plant Variant ID (Small / Medium / Large …)' })
+  @UseGuards(AuthGuard('jwt'), FeatureGuard)
+  @RequireFeature(PlanFeature.QR)
+  @Get('label/:plantId/:variantId')
+  async generateVariantLabel(
+    @Param('plantId') plantId: string,
+    @Param('variantId') variantId: string,
+    @Request() req: any,
+  ) {
+    const plant = await this.qrService.getPlantForLabel(+plantId, req.user.organizationId);
+    const qrData = await this.qrService.generate(+plantId, req.user.organizationId, +variantId);
+
+    return {
+      plant,
+      qrCode: qrData,
+      labelData: {
+        name: plant.name,
+        scientificName: plant.scientificName,
+        careInstructions: plant.careInstructions,
+        waterRequirement: plant.waterRequirement,
+        sunlightRequirement: plant.sunlightRequirement,
+        temperatureRange: plant.temperatureMin && plant.temperatureMax
+          ? `${plant.temperatureMin}°C - ${plant.temperatureMax}°C`
+          : null,
+        season: plant.season,
+        sku: plant.sku,
+        variantId: +variantId,
         qrCodeUrl: qrData.code,
         qrImageBase64: qrData.qrImageBase64,
       },

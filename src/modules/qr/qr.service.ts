@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial } from 'typeorm';
+import { Repository, DeepPartial, IsNull } from 'typeorm';
 import * as QRCode from 'qrcode';
 import { QrCode } from './qr-code.entity';
 import { QrScanLog } from './scan-log.entity';
@@ -40,8 +40,9 @@ export class QrService {
     }
   }
 
-  private buildPlantQrUrl(plantId: number): string {
-    return `${this.getPublicQrBaseUrl()}/plant/${plantId}`;
+  private buildPlantQrUrl(plantId: number, variantId?: number | null): string {
+    const base = `${this.getPublicQrBaseUrl()}/plant/${plantId}`;
+    return variantId ? `${base}?variantId=${variantId}` : base;
   }
 
   private decodeInput(value: string): string {
@@ -167,7 +168,7 @@ export class QrService {
     return firstActiveVariant;
   }
 
-  async generate(plantId: number, organizationId: string) {
+  async generate(plantId: number, organizationId: string, variantId?: number | null) {
     const plant = await this.plantRepo.findOne({
       where: { id: plantId, organizationId, status: true },
       relations: ['category', 'subcategory', 'variants'],
@@ -175,8 +176,27 @@ export class QrService {
 
     if (!plant) throw new NotFoundException('Plant not found');
 
-    const code = this.buildPlantQrUrl(plantId);
-    const existing = await this.qrRepo.findOne({ where: { plantId } });
+    // When a variantId is provided, validate it belongs to this plant
+    if (variantId) {
+      const variant = await this.variantRepo.findOne({
+        where: { id: variantId, plantId, organizationId, status: true },
+      });
+      if (!variant) {
+        throw new NotFoundException(`Variant ${variantId} not found for plant ${plantId}`);
+      }
+    }
+
+    const code = this.buildPlantQrUrl(plantId, variantId);
+
+    // Look up existing QR by plant + variant combo
+    const existing = await this.qrRepo.findOne({
+      where: variantId !== undefined
+        ? variantId !== null
+          ? { plantId, variantId }
+          : { plantId, variantId: IsNull() }
+        : { plantId },
+    });
+
     if (existing) {
       if (existing.code !== code) {
         existing.code = code;
@@ -184,12 +204,16 @@ export class QrService {
         await this.qrRepo.save(existing);
       }
 
-      await this.plantRepo.update(plantId, { qrCodeUrl: code });
+      // Only update the plant-level qrCodeUrl when generating the generic (no-variant) QR
+      if (!variantId) {
+        await this.plantRepo.update(plantId, { qrCodeUrl: code });
+      }
 
       return {
         code,
         qrImageBase64: existing.qrImageBase64,
         plantId,
+        variantId: variantId ?? null,
         id: existing.id,
       };
     }
@@ -199,16 +223,19 @@ export class QrService {
     const qrCode = this.qrRepo.create({
       code,
       plantId,
+      variantId: variantId ?? null,
       organizationId,
       qrImageBase64,
     });
 
     const saved = await this.qrRepo.save(qrCode);
 
-    // Store the QR code reference on the plant
-    await this.plantRepo.update(plantId, { qrCodeUrl: code });
+    // Store the QR code reference on the plant only for the generic QR
+    if (!variantId) {
+      await this.plantRepo.update(plantId, { qrCodeUrl: code });
+    }
 
-    return { code, qrImageBase64, plantId, id: saved.id };
+    return { code, qrImageBase64, plantId, variantId: variantId ?? null, id: saved.id };
   }
 
   async scan(code: string, metadata?: {

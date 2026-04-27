@@ -23,6 +23,7 @@ import { PlansModule } from './modules/plans/plans.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { EmailModule } from './modules/email/email.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { ensureQrCodeSchema } from './database/ensure-qr-code-schema';
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
@@ -76,7 +77,9 @@ function getDatabaseType(databaseUrl: string): TypeOrmModuleOptions['type'] {
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService): TypeOrmModuleOptions => {
+      useFactory: async (
+        configService: ConfigService,
+      ): Promise<TypeOrmModuleOptions> => {
         const databaseUrl = configService.get<string>('DATABASE_URL');
 
         if (!databaseUrl) {
@@ -96,8 +99,14 @@ function getDatabaseType(databaseUrl: string): TypeOrmModuleOptions['type'] {
           !isProduction,
         );
 
+        const databaseType = getDatabaseType(databaseUrl);
+
+        if (dbSynchronize && databaseType === 'postgres') {
+          await ensureQrCodeSchema(databaseUrl);
+        }
+
         return {
-          type: getDatabaseType(databaseUrl),
+          type: databaseType,
           url: databaseUrl,
           autoLoadEntities: true,
           synchronize: dbSynchronize,
