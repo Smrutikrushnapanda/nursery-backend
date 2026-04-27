@@ -75,20 +75,19 @@ export class PlantVariantsService {
 
     const query = this.plantVariantRepo
       .createQueryBuilder('variant')
-      .innerJoinAndSelect('variant.plant', 'plant', 'plant.status = :plantStatus', { plantStatus: true })
+      .innerJoinAndSelect('variant.plant', 'plant')
       .leftJoinAndSelect('variant.stock', 'stock')
-      .where('variant.status = :variantStatus', { variantStatus: true })
       .orderBy('variant.createdAt', 'DESC');
 
     if (orgId) {
-      query.andWhere('variant.organizationId = :orgId', { orgId });
+      query.where('variant.organizationId = :orgId', { orgId });
 
       if (plantId !== undefined) {
         await this.ensurePlantBelongsToOrg(plantId, orgId);
         query.andWhere('variant.plantId = :plantId', { plantId });
       }
     } else if (plantId !== undefined) {
-      query.andWhere('variant.plantId = :plantId', { plantId });
+      query.where('variant.plantId = :plantId', { plantId });
     }
 
     const variants = await query.getMany();
@@ -102,13 +101,12 @@ export class PlantVariantsService {
 
     const query = this.plantVariantRepo
       .createQueryBuilder('variant')
-      .innerJoinAndSelect('variant.plant', 'plant', 'plant.status = :plantStatus', { plantStatus: true })
+      .innerJoinAndSelect('variant.plant', 'plant')
       .leftJoinAndSelect('variant.stock', 'stock')
-      .where('variant.status = :variantStatus', { variantStatus: true })
       .orderBy('variant.createdAt', 'DESC');
 
     if (orgId) {
-      query.andWhere('variant.organizationId = :orgId', { orgId });
+      query.where('variant.organizationId = :orgId', { orgId });
     }
 
     const [variants, total] = await query
@@ -132,10 +130,9 @@ export class PlantVariantsService {
   async findOne(id: number, orgId: string | undefined) {
     const query = this.plantVariantRepo
       .createQueryBuilder('variant')
-      .innerJoinAndSelect('variant.plant', 'plant', 'plant.status = :plantStatus', { plantStatus: true })
+      .innerJoinAndSelect('variant.plant', 'plant')
       .leftJoinAndSelect('variant.stock', 'stock')
-      .where('variant.id = :id', { id })
-      .andWhere('variant.status = :variantStatus', { variantStatus: true });
+      .where('variant.id = :id', { id });
 
     if (orgId) {
       query.andWhere('variant.organizationId = :orgId', { orgId });

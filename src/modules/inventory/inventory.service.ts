@@ -5,21 +5,33 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  Brackets,
   DataSource,
   EntityManager,
   QueryFailedError,
   Repository,
 } from 'typeorm';
 import { PlantVariant } from '../plants/plant-variant.entity';
+import { QrCode } from '../qr/qr-code.entity';
 import { PlantStock } from './entities/plant-stock.entity';
 import { StockLog, StockLogType } from './entities/stock-log.entity';
-import { UpdateStockDto } from './dto/stock-change.dto';
+
+type InventoryQrCodeResponse = {
+  code: string | null;
+  qrImageBase64: string | null;
+  plantId: number | null;
+  variantId: number | null;
+  id: number | null;
+  alreadyGenerated: 0 | 1;
+};
 
 @Injectable()
 export class InventoryService {
   constructor(
     @InjectRepository(PlantStock)
     private readonly stockRepo: Repository<PlantStock>,
+    @InjectRepository(QrCode)
+    private readonly qrRepo: Repository<QrCode>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -69,10 +81,89 @@ export class InventoryService {
   }
 
   async getAllStock(organizationId: string) {
-    return this.stockRepo.find({
+    const stocks = await this.stockRepo.find({
       where: { organizationId },
       relations: ['variant', 'variant.plant', 'variant.plant.category', 'variant.plant.subcategory'],
       order: { variantId: 'ASC' },
+    });
+
+    if (stocks.length === 0) {
+      return stocks;
+    }
+
+    const plantIds = Array.from(
+      new Set(
+        stocks
+          .map((stock) => stock.variant?.plant?.id)
+          .filter((plantId): plantId is number => Number.isInteger(plantId)),
+      ),
+    );
+    const variantIds = Array.from(
+      new Set(
+        stocks
+          .map((stock) => stock.variantId)
+          .filter((variantId): variantId is number =>
+            Number.isInteger(variantId),
+          ),
+      ),
+    );
+
+    const qrQuery = this.qrRepo
+      .createQueryBuilder('qr')
+      .where('qr.organizationId = :organizationId', { organizationId });
+
+    if (variantIds.length > 0 && plantIds.length > 0) {
+      qrQuery.andWhere(
+        new Brackets((qb) => {
+          qb.where('qr.variantId IN (:...variantIds)', { variantIds }).orWhere(
+            'qr.variantId IS NULL AND qr.plantId IN (:...plantIds)',
+            { plantIds },
+          );
+        }),
+      );
+    } else if (variantIds.length > 0) {
+      qrQuery.andWhere('qr.variantId IN (:...variantIds)', { variantIds });
+    } else if (plantIds.length > 0) {
+      qrQuery.andWhere('qr.variantId IS NULL AND qr.plantId IN (:...plantIds)', {
+        plantIds,
+      });
+    } else {
+      return stocks.map((stock) => ({
+        ...stock,
+        qrCode: this.buildInventoryQrCode(
+          null,
+          stock.variant?.plant?.id,
+          stock.variantId,
+        ),
+      }));
+    }
+
+    const qrCodes = await qrQuery.getMany();
+    const qrByVariantId = new Map<number, QrCode>();
+    const qrByPlantId = new Map<number, QrCode>();
+
+    for (const qrCode of qrCodes) {
+      if (qrCode.variantId !== null) {
+        qrByVariantId.set(qrCode.variantId, qrCode);
+      } else {
+        qrByPlantId.set(qrCode.plantId, qrCode);
+      }
+    }
+
+    return stocks.map((stock) => {
+      const plantId = stock.variant?.plant?.id;
+      const variantQrCode = qrByVariantId.get(stock.variantId) ?? null;
+      const plantQrCode = plantId ? qrByPlantId.get(plantId) ?? null : null;
+      const selectedQrCode = variantQrCode ?? plantQrCode;
+
+      return {
+        ...stock,
+        qrCode: this.buildInventoryQrCode(
+          selectedQrCode,
+          plantId,
+          stock.variantId,
+        ),
+      };
     });
   }
 
@@ -322,5 +413,31 @@ export class InventoryService {
       queryError.code === 'ER_DUP_ENTRY' ||
       queryError.errno === 1062
     );
+  }
+
+  private buildInventoryQrCode(
+    qrCode: QrCode | null,
+    plantId?: number,
+    variantId?: number,
+  ): InventoryQrCodeResponse {
+    if (qrCode) {
+      return {
+        code: qrCode.code ?? null,
+        qrImageBase64: qrCode.qrImageBase64 ?? null,
+        plantId: qrCode.plantId ?? null,
+        variantId: qrCode.variantId,
+        id: qrCode.id ?? null,
+        alreadyGenerated: 1,
+      };
+    }
+
+    return {
+      code: null,
+      qrImageBase64: null,
+      plantId: plantId ?? null,
+      variantId: variantId ?? null,
+      id: null,
+      alreadyGenerated: 0,
+    };
   }
 }

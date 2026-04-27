@@ -37,14 +37,13 @@ export class CategoriesService {
 
     if (!organizationId) {
       categories = await this.categoryRepository.find({
-        where: { status: true },
         order: { id: 'ASC' },
       });
     } else {
       categories = await this.categoryRepository.find({
         where: [
-          { organizationId, status: true },
-          { organizationId: IsNull(), status: true },
+          { organizationId },
+          { organizationId: IsNull() },
         ],
         order: { id: 'ASC' },
       });
@@ -66,7 +65,6 @@ export class CategoriesService {
 
     if (!organizationId) {
       [categories, total] = await this.categoryRepository.findAndCount({
-        where: { status: true },
         order: { id: 'ASC' },
         skip: (pageNum - 1) * limitNum,
         take: limitNum,
@@ -74,8 +72,8 @@ export class CategoriesService {
     } else {
       [categories, total] = await this.categoryRepository.findAndCount({
         where: [
-          { organizationId, status: true },
-          { organizationId: IsNull(), status: true },
+          { organizationId },
+          { organizationId: IsNull() },
         ],
         order: { id: 'ASC' },
         skip: (pageNum - 1) * limitNum,

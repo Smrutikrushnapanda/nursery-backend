@@ -130,16 +130,10 @@ export class PlantsService {
       .createQueryBuilder('plant')
       .leftJoinAndSelect('plant.category', 'category')
       .leftJoinAndSelect('plant.subcategory', 'subcategory')
-      .leftJoinAndSelect(
-        'plant.variants',
-        'variant',
-        'variant.status = :variantStatus',
-        { variantStatus: true },
-      )
+      .leftJoinAndSelect('plant.variants', 'variant')
       .leftJoinAndSelect('variant.stock', 'stock')
       .leftJoinAndSelect('plant.images', 'image')
-      .where(orgId ? 'plant.organizationId = :orgId' : '1=1', { orgId })
-      .andWhere('plant.status = :plantStatus', { plantStatus: true });
+      .where(orgId ? 'plant.organizationId = :orgId' : '1=1', { orgId });
 
     // Apply categoryId filter if provided
     if (categoryId && categoryId !== '' && categoryId !== 'undefined') {
@@ -177,16 +171,10 @@ export class PlantsService {
       .createQueryBuilder('plant')
       .leftJoinAndSelect('plant.category', 'category')
       .leftJoinAndSelect('plant.subcategory', 'subcategory')
-      .leftJoinAndSelect(
-        'plant.variants',
-        'variant',
-        'variant.status = :variantStatus',
-        { variantStatus: true },
-      )
+      .leftJoinAndSelect('plant.variants', 'variant')
       .leftJoinAndSelect('variant.stock', 'stock')
       .leftJoinAndSelect('plant.images', 'image')
-      .where(orgId ? 'plant.organizationId = :orgId' : '1=1', { orgId })
-      .andWhere('plant.status = :plantStatus', { plantStatus: true });
+      .where(orgId ? 'plant.organizationId = :orgId' : '1=1', { orgId });
 
     const [plants, total] = await query
       .orderBy('plant.createdAt', 'DESC')
@@ -213,17 +201,11 @@ export class PlantsService {
       .createQueryBuilder('plant')
       .leftJoinAndSelect('plant.category', 'category')
       .leftJoinAndSelect('plant.subcategory', 'subcategory')
-      .leftJoinAndSelect(
-        'plant.variants',
-        'variant',
-        'variant.status = :variantStatus',
-        { variantStatus: true },
-      )
+      .leftJoinAndSelect('plant.variants', 'variant')
       .leftJoinAndSelect('variant.stock', 'stock')
       .leftJoinAndSelect('plant.images', 'image')
       .where('plant.id = :id', { id })
       .andWhere(orgId ? 'plant.organizationId = :orgId' : '1=1', { orgId })
-      .andWhere('plant.status = :plantStatus', { plantStatus: true })
       .orderBy('image.displayOrder', 'ASC')
       .getOne();
 
