@@ -44,7 +44,7 @@ class SellerQrScanDto {
   code?: string;
 
   @ApiPropertyOptional({
-    description: 'Product/plant identifier. Can be numeric id or URL.',
+    description: 'Product/plant identifier. Supports plant ID, plant SKU, variant SKU, or URL.',
     example: '12',
   })
   @IsOptional()
@@ -130,8 +130,8 @@ export class QrController {
     });
   }
 
-  @ApiOperation({ summary: 'Scan by product ID — returns plant data (PUBLIC, no auth)' })
-  @ApiParam({ name: 'productId', type: String, description: 'Product ID' })
+  @ApiOperation({ summary: 'Scan by product ID or SKU — returns plant data (PUBLIC, no auth)' })
+  @ApiParam({ name: 'productId', type: String, description: 'Product ID or SKU' })
   @ApiQuery({ name: 'location', required: false, description: 'Scan location' })
   @ApiQuery({ name: 'device', required: false, description: 'Device info' })
   @Get('scan/id/:productId')

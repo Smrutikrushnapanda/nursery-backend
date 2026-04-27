@@ -109,6 +109,81 @@ export class QrService {
     return null;
   }
 
+  private async findPlantByIdentifier(
+    identifier: string,
+    organizationId?: string,
+  ): Promise<{ plant: Plant; matchedVariantId?: number } | null> {
+    const extractedId = this.extractPlantId(identifier);
+
+    // First, try to find by variant ID (for numeric identifiers)
+    if (extractedId) {
+      const variantById = await this.variantRepo.findOne({
+        where: organizationId
+          ? { id: extractedId, organizationId, status: true }
+          : { id: extractedId, status: true },
+        relations: ['plant', 'plant.category', 'plant.subcategory', 'plant.variants'],
+      });
+      if (variantById?.plant) {
+        return { plant: variantById.plant, matchedVariantId: variantById.id };
+      }
+
+      // If not found as variant, try plant ID
+      const plantById = await this.plantRepo.findOne({
+        where: organizationId
+          ? { id: extractedId, organizationId }
+          : { id: extractedId },
+        relations: ['category', 'subcategory', 'variants'],
+      });
+      if (plantById) {
+        return { plant: plantById };
+      }
+    }
+
+    const normalizedIdentifier = identifier.toLowerCase();
+
+    // Try to find by plant SKU
+    const plantSkuQuery = this.plantRepo
+      .createQueryBuilder('plant')
+      .leftJoinAndSelect('plant.category', 'category')
+      .leftJoinAndSelect('plant.subcategory', 'subcategory')
+      .leftJoinAndSelect('plant.variants', 'variants')
+      .where('LOWER(plant.sku) = :identifier', { identifier: normalizedIdentifier });
+
+    if (organizationId) {
+      plantSkuQuery.andWhere('plant.organizationId = :organizationId', {
+        organizationId,
+      });
+    }
+
+    const plantBySku = await plantSkuQuery.orderBy('plant.id', 'ASC').getOne();
+    if (plantBySku) {
+      return { plant: plantBySku };
+    }
+
+    // Try to find by variant SKU
+    const variantSkuQuery = this.variantRepo
+      .createQueryBuilder('variant')
+      .leftJoinAndSelect('variant.plant', 'plant')
+      .leftJoinAndSelect('plant.category', 'category')
+      .leftJoinAndSelect('plant.subcategory', 'subcategory')
+      .leftJoinAndSelect('plant.variants', 'variants')
+      .where('LOWER(variant.sku) = :identifier', { identifier: normalizedIdentifier })
+      .andWhere('variant.status = true');
+
+    if (organizationId) {
+      variantSkuQuery.andWhere('variant.organizationId = :organizationId', {
+        organizationId,
+      });
+    }
+
+    const variantBySku = await variantSkuQuery.orderBy('variant.id', 'ASC').getOne();
+    if (variantBySku?.plant) {
+      return { plant: variantBySku.plant, matchedVariantId: variantBySku.id };
+    }
+
+    return null;
+  }
+
   private createScanMetadata(
     metadata?: {
       scannedBy?: string;
@@ -277,6 +352,7 @@ export class QrService {
     ipAddress?: string;
   }, options?: {
     skipBuyerPlanValidation?: boolean;
+    organizationId?: string;
   }) {
     const normalizedCode = this.decodeInput(code);
     const qrCode = await this.qrRepo.findOne({
@@ -310,6 +386,7 @@ export class QrService {
       code: qrCode.code,
       id: qrCode.id,
       plant: qrCode.plant,
+      matchedVariantId: qrCode.variantId ?? undefined,
       scannedAt: new Date(),
     };
   }
@@ -321,17 +398,15 @@ export class QrService {
     ipAddress?: string;
   }, options?: {
     skipBuyerPlanValidation?: boolean;
+    organizationId?: string;
   }) {
     const normalizedInput = this.decodeInput(productId);
-    const extractedPlantId = this.extractPlantId(normalizedInput);
+    const resolvedPlant = await this.findPlantByIdentifier(
+      normalizedInput,
+      options?.organizationId,
+    );
 
-    // Try to find plant by ID
-    const plant = await this.plantRepo.findOne({
-      where: extractedPlantId ? { id: extractedPlantId } : { id: -1 },
-      relations: ['category', 'subcategory', 'variants'],
-    });
-
-    if (!plant) {
+    if (!resolvedPlant) {
       // Try to find by qrCodeUrl
       const qrCode = await this.qrRepo.findOne({
         where: { code: normalizedInput },
@@ -360,9 +435,12 @@ export class QrService {
         code: qrCode.code,
         id: qrCode.id,
         plant: qrCode.plant,
+        matchedVariantId: qrCode.variantId ?? undefined,
         scannedAt: new Date(),
       };
     }
+
+    const plant = resolvedPlant.plant;
 
     await this.ensureBuyerCanViewScanDetails(
       plant.organizationId,
@@ -382,6 +460,7 @@ export class QrService {
       code: plant.qrCodeUrl || normalizedInput,
       id: plant.id,
       plant,
+      matchedVariantId: resolvedPlant.matchedVariantId,
       scannedAt: new Date(),
     };
   }
@@ -399,6 +478,53 @@ export class QrService {
   }) {
     const quantity = input.quantity && input.quantity > 0 ? input.quantity : 1;
 
+    // If variantId is provided directly, fetch the variant and its plant
+    if (input.variantId) {
+      const variant = await this.variantRepo.findOne({
+        where: {
+          id: input.variantId,
+          organizationId: input.organizationId,
+          status: true,
+        },
+        relations: ['plant', 'plant.category', 'plant.subcategory', 'plant.variants'],
+      });
+
+      if (!variant) {
+        throw new NotFoundException(`Variant #${input.variantId} not found`);
+      }
+
+      if (!variant.plant) {
+        throw new NotFoundException('Plant data not found for this variant');
+      }
+
+      const cart = await this.cartService.add(
+        {
+          variantId: variant.id,
+          quantity,
+        },
+        input.scannedBy,
+        input.organizationId,
+      );
+
+      return {
+        scan: {
+          code: '',
+          id: variant.plant.id,
+          plant: variant.plant,
+          matchedVariantId: variant.id,
+          scannedAt: new Date(),
+        },
+        addedVariant: {
+          id: variant.id,
+          size: variant.size,
+          sku: variant.sku,
+          price: Number(variant.price),
+        },
+        quantity,
+        cart,
+      };
+    }
+
     if (!input.code && !input.productId) {
       throw new BadRequestException('code or productId is required');
     }
@@ -411,6 +537,7 @@ export class QrService {
           ipAddress: input.ipAddress,
         }, {
           skipBuyerPlanValidation: true,
+          organizationId: input.organizationId,
         })
       : await this.scanById(input.productId!, {
           scannedBy: input.scannedBy,
@@ -419,6 +546,7 @@ export class QrService {
           ipAddress: input.ipAddress,
         }, {
           skipBuyerPlanValidation: true,
+          organizationId: input.organizationId,
         });
 
     const scannedPlant = scanResult.plant;
@@ -432,10 +560,16 @@ export class QrService {
       );
     }
 
+    const matchedVariantId =
+      input.variantId ??
+      (typeof scanResult.matchedVariantId === 'number'
+        ? scanResult.matchedVariantId
+        : undefined);
+
     const variant = await this.resolveVariantForCart(
       scannedPlant.id,
       input.organizationId,
-      input.variantId,
+      matchedVariantId,
     );
 
     const cart = await this.cartService.add(
