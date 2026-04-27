@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial, IsNull } from 'typeorm';
@@ -11,6 +12,8 @@ import { QrScanLog } from './scan-log.entity';
 import { Plant } from '../plants/plant.entity';
 import { PlantVariant } from '../plants/plant-variant.entity';
 import { CartService } from '../cart/cart.service';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { PlanFeature } from '../plans/entities/plan.entity';
 
 @Injectable()
 export class QrService {
@@ -24,6 +27,7 @@ export class QrService {
     @InjectRepository(PlantVariant)
     private readonly variantRepo: Repository<PlantVariant>,
     private readonly cartService: CartService,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   private getPublicQrBaseUrl(): string {
@@ -168,6 +172,33 @@ export class QrService {
     return firstActiveVariant;
   }
 
+  private async ensureBuyerCanViewScanDetails(
+    organizationId: string,
+    skipPlanValidation?: boolean,
+  ) {
+    if (skipPlanValidation) {
+      return;
+    }
+
+    const activeSubscription =
+      await this.subscriptionsService.getActiveForFeatureCheck(organizationId);
+
+    if (!activeSubscription?.plan) {
+      throw new ForbiddenException('No active subscription found for QR scan');
+    }
+
+    const features = activeSubscription.plan.features ?? [];
+    const canBuyerScan =
+      features.includes(PlanFeature.QR) &&
+      features.includes(PlanFeature.ANALYTICS);
+
+    if (!canBuyerScan) {
+      throw new ForbiddenException(
+        'Buyer QR scan is available only for premium plan',
+      );
+    }
+  }
+
   async generate(plantId: number, organizationId: string, variantId?: number | null) {
     const plant = await this.plantRepo.findOne({
       where: { id: plantId, organizationId, status: true },
@@ -243,6 +274,8 @@ export class QrService {
     scanLocation?: string;
     deviceInfo?: string;
     ipAddress?: string;
+  }, options?: {
+    skipBuyerPlanValidation?: boolean;
   }) {
     const normalizedCode = this.decodeInput(code);
     const qrCode = await this.qrRepo.findOne({
@@ -253,10 +286,15 @@ export class QrService {
     if (!qrCode) {
       const plantId = this.extractPlantId(normalizedCode);
       if (plantId) {
-        return this.scanById(String(plantId), metadata);
+        return this.scanById(String(plantId), metadata, options);
       }
       throw new NotFoundException('QR code not found');
     }
+
+    await this.ensureBuyerCanViewScanDetails(
+      qrCode.organizationId,
+      options?.skipBuyerPlanValidation,
+    );
 
     await this.logScan(
       {
@@ -280,6 +318,8 @@ export class QrService {
     scanLocation?: string;
     deviceInfo?: string;
     ipAddress?: string;
+  }, options?: {
+    skipBuyerPlanValidation?: boolean;
   }) {
     const normalizedInput = this.decodeInput(productId);
     const extractedPlantId = this.extractPlantId(normalizedInput);
@@ -301,6 +341,11 @@ export class QrService {
         throw new NotFoundException('Product not found');
       }
 
+      await this.ensureBuyerCanViewScanDetails(
+        qrCode.organizationId,
+        options?.skipBuyerPlanValidation,
+      );
+
       await this.logScan(
         {
           qrCode: qrCode.code,
@@ -317,6 +362,11 @@ export class QrService {
         scannedAt: new Date(),
       };
     }
+
+    await this.ensureBuyerCanViewScanDetails(
+      plant.organizationId,
+      options?.skipBuyerPlanValidation,
+    );
 
     await this.logScan(
       {
@@ -358,12 +408,16 @@ export class QrService {
           scanLocation: input.scanLocation,
           deviceInfo: input.deviceInfo,
           ipAddress: input.ipAddress,
+        }, {
+          skipBuyerPlanValidation: true,
         })
       : await this.scanById(input.productId!, {
           scannedBy: input.scannedBy,
           scanLocation: input.scanLocation,
           deviceInfo: input.deviceInfo,
           ipAddress: input.ipAddress,
+        }, {
+          skipBuyerPlanValidation: true,
         });
 
     const scannedPlant = scanResult.plant;
@@ -431,19 +485,35 @@ export class QrService {
   async generateBulk(organizationId: string, filters: {
     categoryId?: number;
     subcategoryId?: number;
+    plantIds?: number[];
   }) {
-    // Build query for plants based on filters
+    // Build query for plants based on filters (OR logic for plantIds with category/subcategory)
     const query = this.plantRepo
       .createQueryBuilder('plant')
       .where('plant.organizationId = :organizationId', { organizationId })
       .andWhere('plant.status = :status', { status: true });
 
+    const conditions: string[] = [];
+    const params: Record<string, any> = { organizationId, status: true };
+
     if (filters.categoryId) {
-      query.andWhere('plant.categoryId = :categoryId', { categoryId: filters.categoryId });
+      conditions.push('plant.categoryId = :categoryId');
+      params.categoryId = filters.categoryId;
     }
 
     if (filters.subcategoryId) {
-      query.andWhere('plant.subcategoryId = :subcategoryId', { subcategoryId: filters.subcategoryId });
+      conditions.push('plant.subcategoryId = :subcategoryId');
+      params.subcategoryId = filters.subcategoryId;
+    }
+
+    if (filters.plantIds && filters.plantIds.length > 0) {
+      conditions.push('plant.id IN (:...plantIds)');
+      params.plantIds = filters.plantIds;
+    }
+
+    // Add OR conditions if any filter is present
+    if (conditions.length > 0) {
+      query.andWhere(`(${conditions.join(' OR ')})`, params);
     }
 
     const plants = await query.getMany();

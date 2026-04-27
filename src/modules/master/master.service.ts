@@ -18,6 +18,7 @@ import { RegistrationCategory } from './registration-category.entity';
 import { RegistrationSubCategory } from './registration-subcategory.entity';
 import { PlanMenuAccess } from './plan-menu-access.entity';
 import { Subscription, SubscriptionStatus } from '../subscriptions/entities/subscription.entity';
+import { Plan, PlanName } from '../plans/entities/plan.entity';
 
 const DEFAULT_REGISTRATION_CATEGORIES = [
   { id: 1, name: 'Agriculture' },
@@ -48,6 +49,150 @@ type MenuAccessLookup = {
   subscriptionId?: string;
 };
 
+type MenuSeed = {
+  key: string;
+  menuName: string;
+  path: string;
+  parentKey: string | null;
+  displayOrder: number;
+};
+
+const DEFAULT_MENUS: MenuSeed[] = [
+  {
+    key: 'dashboard',
+    menuName: 'Dashboard',
+    path: '/dashboard',
+    parentKey: null,
+    displayOrder: 1,
+  },
+  {
+    key: 'master',
+    menuName: 'Master',
+    path: '/master',
+    parentKey: null,
+    displayOrder: 2,
+  },
+  {
+    key: 'workflow',
+    menuName: 'Workflow',
+    path: '/workflow',
+    parentKey: null,
+    displayOrder: 3,
+  },
+  {
+    key: 'report',
+    menuName: 'Report',
+    path: '/report',
+    parentKey: null,
+    displayOrder: 4,
+  },
+  {
+    key: 'plant_master',
+    menuName: 'Plant Master',
+    path: '/master/plant',
+    parentKey: 'master',
+    displayOrder: 1,
+  },
+  {
+    key: 'plant_variant',
+    menuName: 'Plant Variant',
+    path: '/master/plant-variant',
+    parentKey: 'master',
+    displayOrder: 2,
+  },
+  {
+    key: 'category_master',
+    menuName: 'Category Master',
+    path: '/master/category',
+    parentKey: 'master',
+    displayOrder: 3,
+  },
+  {
+    key: 'sub_category',
+    menuName: 'Sub Category',
+    path: '/master/sub-category',
+    parentKey: 'master',
+    displayOrder: 4,
+  },
+  {
+    key: 'inventory',
+    menuName: 'Inventory',
+    path: '/workflow/inventory',
+    parentKey: 'workflow',
+    displayOrder: 1,
+  },
+  {
+    key: 'payments',
+    menuName: 'Payments',
+    path: '/workflow/payment',
+    parentKey: 'workflow',
+    displayOrder: 2,
+  },
+  {
+    key: 'print_qr',
+    menuName: 'Print QR',
+    path: '/workflow/print-qr',
+    parentKey: 'workflow',
+    displayOrder: 3,
+  },
+  {
+    key: 'scan_sell',
+    menuName: 'Scan & Sell',
+    path: '/workflow/scan-sell',
+    parentKey: 'workflow',
+    displayOrder: 4,
+  },
+  {
+    key: 'sales_report',
+    menuName: 'Sales Report',
+    path: '/report/sales',
+    parentKey: 'report',
+    displayOrder: 1,
+  },
+  {
+    key: 'log_reports',
+    menuName: 'Log Reports',
+    path: '/report/log-report',
+    parentKey: 'report',
+    displayOrder: 2,
+  },
+  {
+    key: 'inventory_report',
+    menuName: 'Inventory Reports',
+    path: '/report/inventory',
+    parentKey: 'report',
+    displayOrder: 3,
+  },
+];
+
+const BASIC_MENU_KEYS: string[] = [
+  'dashboard',
+  'master',
+  'plant_master',
+  'plant_variant',
+  'category_master',
+  'sub_category',
+  'workflow',
+  'inventory',
+  'payments',
+  'report',
+  'log_reports',
+];
+
+const STANDARD_AND_PREMIUM_MENU_KEYS: string[] = [
+  ...BASIC_MENU_KEYS,
+  'print_qr',
+  'scan_sell',
+  'sales_report',
+  'inventory_report',
+];
+
+const PLAN_MENU_KEYS: Record<PlanName, string[]> = {
+  [PlanName.BASIC]: BASIC_MENU_KEYS,
+  [PlanName.STANDARD]: STANDARD_AND_PREMIUM_MENU_KEYS,
+  [PlanName.PREMIUM]: STANDARD_AND_PREMIUM_MENU_KEYS,
+};
+
 @Injectable()
 export class MasterService implements OnModuleInit {
   constructor(
@@ -61,6 +206,8 @@ export class MasterService implements OnModuleInit {
     private readonly menuMasterRepository: Repository<MenuMaster>,
     @InjectRepository(PlanMenuAccess)
     private readonly planMenuAccessRepository: Repository<PlanMenuAccess>,
+    @InjectRepository(Plan)
+    private readonly planRepository: Repository<Plan>,
     @InjectRepository(Subscription)
     private readonly subscriptionRepository: Repository<Subscription>,
     @InjectRepository(RegistrationCategory)
@@ -71,6 +218,7 @@ export class MasterService implements OnModuleInit {
 
   async onModuleInit() {
     await this.seedBusinessTypes();
+    await this.syncPlanMenuAccessByPlanId();
   }
 
   private async seedBusinessTypes() {
@@ -244,6 +392,146 @@ export class MasterService implements OnModuleInit {
     await this.seedRegistrationSubCategories();
   }
 
+  private normalizeText(value: string): string {
+    return value.trim().toLowerCase();
+  }
+
+  private normalizePath(value: string): string {
+    return value.trim().replace(/\/+$/, '').toLowerCase();
+  }
+
+  private async upsertDefaultMenus(): Promise<Map<string, MenuMaster>> {
+    const allMenus = await this.menuMasterRepository.find({
+      order: { id: 'ASC' },
+    });
+
+    const menuByPath = new Map<string, MenuMaster>();
+    const menuByName = new Map<string, MenuMaster>();
+
+    for (const menu of allMenus) {
+      if (menu.path) {
+        menuByPath.set(this.normalizePath(menu.path), menu);
+      }
+      menuByName.set(this.normalizeText(menu.menuName), menu);
+    }
+
+    const menuByKey = new Map<string, MenuMaster>();
+
+    for (const definition of DEFAULT_MENUS) {
+      const normalizedPath = this.normalizePath(definition.path);
+      const normalizedName = this.normalizeText(definition.menuName);
+      const existing =
+        menuByPath.get(normalizedPath) ?? menuByName.get(normalizedName);
+
+      const parentId = definition.parentKey
+        ? menuByKey.get(definition.parentKey)?.id ?? null
+        : null;
+
+      if (!existing) {
+        const created = await this.menuMasterRepository.save(
+          this.menuMasterRepository.create({
+            menuName: definition.menuName,
+            path: definition.path,
+            parentId,
+            displayOrder: definition.displayOrder,
+            isVisible: true,
+            status: true,
+          }),
+        );
+
+        menuByKey.set(definition.key, created);
+        menuByPath.set(normalizedPath, created);
+        menuByName.set(normalizedName, created);
+        continue;
+      }
+
+      const shouldUpdate =
+        existing.menuName !== definition.menuName ||
+        existing.path !== definition.path ||
+        (existing.parentId ?? null) !== parentId ||
+        existing.displayOrder !== definition.displayOrder ||
+        existing.isVisible !== true ||
+        existing.status !== true;
+
+      if (shouldUpdate) {
+        existing.menuName = definition.menuName;
+        existing.path = definition.path;
+        existing.parentId = parentId;
+        existing.displayOrder = definition.displayOrder;
+        existing.isVisible = true;
+        existing.status = true;
+        await this.menuMasterRepository.save(existing);
+      }
+
+      menuByKey.set(definition.key, existing);
+      menuByPath.set(normalizedPath, existing);
+      menuByName.set(normalizedName, existing);
+    }
+
+    return menuByKey;
+  }
+
+  private async syncPlanMenuAccessByPlanId(): Promise<void> {
+    const menuByKey = await this.upsertDefaultMenus();
+    const plans = await this.planRepository.find();
+
+    for (const plan of plans) {
+      const allowedMenuKeys = PLAN_MENU_KEYS[plan.name as PlanName];
+      if (!allowedMenuKeys || allowedMenuKeys.length === 0) {
+        continue;
+      }
+
+      const allowedMenuIds = allowedMenuKeys
+        .map((menuKey) => menuByKey.get(menuKey)?.id)
+        .filter((menuId): menuId is number => typeof menuId === 'number');
+
+      if (allowedMenuIds.length === 0) {
+        continue;
+      }
+
+      const existingRows = await this.planMenuAccessRepository.find({
+        where: { planId: plan.id },
+      });
+      const rowByMenuId = new Map(existingRows.map((row) => [row.menuId, row]));
+
+      const rowsToSave: PlanMenuAccess[] = [];
+
+      for (const menuId of allowedMenuIds) {
+        const existingRow = rowByMenuId.get(menuId);
+        if (!existingRow) {
+          rowsToSave.push(
+            this.planMenuAccessRepository.create({
+              planId: plan.id,
+              menuId,
+              status: true,
+            }),
+          );
+          continue;
+        }
+
+        if (!existingRow.status) {
+          existingRow.status = true;
+          rowsToSave.push(existingRow);
+        }
+      }
+
+      for (const existingRow of existingRows) {
+        if (allowedMenuIds.includes(existingRow.menuId)) {
+          continue;
+        }
+
+        if (existingRow.status) {
+          existingRow.status = false;
+          rowsToSave.push(existingRow);
+        }
+      }
+
+      if (rowsToSave.length > 0) {
+        await this.planMenuAccessRepository.save(rowsToSave);
+      }
+    }
+  }
+
   private async resolvePlanIdForMenus({
     organizationId,
     subscriptionId,
@@ -262,7 +550,10 @@ export class MasterService implements OnModuleInit {
     }
 
     if (!organizationId) {
-      return null;
+      const basicPlan = await this.planRepository.findOne({
+        where: { name: PlanName.BASIC, isActive: true },
+      });
+      return basicPlan?.id ?? null;
     }
 
     const subscription = await this.subscriptionRepository.findOne({
@@ -273,7 +564,15 @@ export class MasterService implements OnModuleInit {
       relations: ['plan'],
     });
 
-    return subscription?.planId ?? null;
+    if (subscription?.planId) {
+      return subscription.planId;
+    }
+
+    const basicPlan = await this.planRepository.findOne({
+      where: { name: PlanName.BASIC, isActive: true },
+    });
+
+    return basicPlan?.id ?? null;
   }
 
   private expandMenuIdsWithParents(menuIds: Set<number>, allMenus: MenuMaster[]) {
@@ -557,7 +856,7 @@ export class MasterService implements OnModuleInit {
      const planId = await this.resolvePlanIdForMenus({ organizationId, subscriptionId });
 
      if (!planId) {
-       return allMenus;
+       return [];
      }
 
      const accessRows = await this.planMenuAccessRepository.find({
@@ -566,7 +865,7 @@ export class MasterService implements OnModuleInit {
      });
 
      if (accessRows.length === 0) {
-       return allMenus;
+       return [];
      }
 
      const expandedMenuIds = this.expandMenuIdsWithParents(

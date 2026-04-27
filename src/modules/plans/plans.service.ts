@@ -6,8 +6,8 @@ import { CreatePlanDto } from './dto/create-plan.dto';
 import { UpdatePlanDto } from './dto/update-plan.dto';
 
 const SEED_PLANS = [
-  { name: PlanName.BASIC, price: 999, features: [PlanFeature.INVENTORY, PlanFeature.BILLING] },
-  { name: PlanName.STANDARD, price: 1999, features: [PlanFeature.INVENTORY, PlanFeature.BILLING, PlanFeature.POS, PlanFeature.REPORTS, PlanFeature.PAYMENTS] },
+  { name: PlanName.BASIC, price: 999, features: [PlanFeature.INVENTORY, PlanFeature.BILLING, PlanFeature.PAYMENTS] },
+  { name: PlanName.STANDARD, price: 1999, features: [PlanFeature.INVENTORY, PlanFeature.BILLING, PlanFeature.POS, PlanFeature.REPORTS, PlanFeature.PAYMENTS, PlanFeature.QR] },
   { name: PlanName.PREMIUM, price: 2999, features: [PlanFeature.INVENTORY, PlanFeature.BILLING, PlanFeature.POS, PlanFeature.REPORTS, PlanFeature.PAYMENTS, PlanFeature.QR, PlanFeature.ANALYTICS] },
 ];
 
@@ -19,10 +19,38 @@ export class PlansService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    // Only seed if table is completely empty — never overwrites admin changes
-    const count = await this.planRepo.count();
-    if (count === 0) {
-      await this.planRepo.save(SEED_PLANS.map((p) => this.planRepo.create(p)));
+    const existingPlans = await this.planRepo.find();
+    const planByName = new Map(existingPlans.map((plan) => [plan.name, plan]));
+    const plansToSave: Plan[] = [];
+
+    for (const seedPlan of SEED_PLANS) {
+      const existingPlan = planByName.get(seedPlan.name);
+
+      if (!existingPlan) {
+        plansToSave.push(this.planRepo.create(seedPlan));
+        continue;
+      }
+
+      const nextFeatures = [...seedPlan.features].sort();
+      const currentFeatures = [...(existingPlan.features ?? [])].sort();
+      const featuresChanged =
+        nextFeatures.length !== currentFeatures.length ||
+        nextFeatures.some((feature, index) => feature !== currentFeatures[index]);
+
+      if (
+        Number(existingPlan.price) !== Number(seedPlan.price) ||
+        featuresChanged ||
+        existingPlan.isActive !== true
+      ) {
+        existingPlan.price = seedPlan.price;
+        existingPlan.features = seedPlan.features;
+        existingPlan.isActive = true;
+        plansToSave.push(existingPlan);
+      }
+    }
+
+    if (plansToSave.length > 0) {
+      await this.planRepo.save(plansToSave);
     }
   }
 

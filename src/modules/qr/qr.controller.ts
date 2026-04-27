@@ -261,9 +261,10 @@ export class QrController {
   }
 
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Bulk generate QR codes for plants filtered by category/subcategory' })
+  @ApiOperation({ summary: 'Bulk generate QR codes for plants filtered by category/subcategory/plants' })
   @ApiQuery({ name: 'categoryId', required: false, type: Number, description: 'Filter by category ID' })
   @ApiQuery({ name: 'subcategoryId', required: false, type: Number, description: 'Filter by subcategory ID' })
+  @ApiQuery({ name: 'plantIds', required: false, type: String, description: 'Comma-separated plant IDs to generate QR for specific plants' })
   @UseGuards(AuthGuard('jwt'), FeatureGuard)
   @RequireFeature(PlanFeature.QR)
   @Post('generate/bulk')
@@ -271,10 +272,13 @@ export class QrController {
     @Request() req: any,
     @Query('categoryId') categoryId?: string,
     @Query('subcategoryId') subcategoryId?: string,
+    @Query('plantIds') plantIds?: string,
   ) {
+    const plantIdArray = plantIds ? plantIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)) : undefined;
     return this.qrService.generateBulk(req.user.organizationId, {
       categoryId: categoryId ? +categoryId : undefined,
       subcategoryId: subcategoryId ? +subcategoryId : undefined,
+      plantIds: plantIdArray,
     });
   }
 
