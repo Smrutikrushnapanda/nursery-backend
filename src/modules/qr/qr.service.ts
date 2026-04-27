@@ -631,6 +631,20 @@ export class QrService {
       .andWhere('scanLog.scannedBy IS NOT NULL')
       .getRawOne();
 
+    const scanSourceCounts = await this.scanLogRepo
+      .createQueryBuilder('scanLog')
+      .select(
+        'SUM(CASE WHEN scanLog.scannedBy IS NOT NULL THEN 1 ELSE 0 END)',
+        'sellerCount',
+      )
+      .addSelect(
+        'SUM(CASE WHEN scanLog.scannedBy IS NULL THEN 1 ELSE 0 END)',
+        'buyerCount',
+      )
+      .where('scanLog.organizationId = :organizationId', { organizationId })
+      .andWhere('scanLog.scannedAt >= :startDate', { startDate })
+      .getRawOne();
+
     // Get daily scan counts for the last 30 days
     const dailyScans = await this.scanLogRepo
       .createQueryBuilder('scanLog')
@@ -646,6 +660,8 @@ export class QrService {
       totalScans: parseInt(totalScans?.count || '0'),
       uniquePlantsScanned: parseInt(uniquePlants?.count || '0'),
       uniqueScanners: parseInt(uniqueScanners?.count || '0'),
+      scannedBySeller: parseInt(scanSourceCounts?.sellerCount || '0'),
+      scannedByBuyer: parseInt(scanSourceCounts?.buyerCount || '0'),
       periodDays: days,
       dailyScans,
     };
