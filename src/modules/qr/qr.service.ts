@@ -246,6 +246,7 @@ export class QrService {
         plantId,
         variantId: variantId ?? null,
         id: existing.id,
+        alreadyGenerated: 1, // QR already existed
       };
     }
 
@@ -266,7 +267,7 @@ export class QrService {
       await this.plantRepo.update(plantId, { qrCodeUrl: code });
     }
 
-    return { code, qrImageBase64, plantId, variantId: variantId ?? null, id: saved.id };
+    return { code, qrImageBase64, plantId, variantId: variantId ?? null, id: saved.id, alreadyGenerated: 0 }; // Newly generated
   }
 
   async scan(code: string, metadata?: {
@@ -527,15 +528,15 @@ export class QrService {
     }
 
     const results = {
-      generated: [] as Array<{ plantId: number; code: string; qrImageBase64: string }>,
-      skipped: [] as Array<{ plantId: number; reason: string }>,
+      generated: [] as Array<{ plantId: number; code: string; qrImageBase64: string; alreadyGenerated: number }>,
+      skipped: [] as Array<{ plantId: number; reason: string; alreadyGenerated: number }>,
     };
 
     for (const plant of plants) {
       // Check if QR already exists
       const existing = await this.qrRepo.findOne({ where: { plantId: plant.id } });
       if (existing) {
-        results.skipped.push({ plantId: plant.id, reason: 'QR code already exists' });
+        results.skipped.push({ plantId: plant.id, reason: 'QR code already exists', alreadyGenerated: 1 });
         continue;
       }
 
@@ -555,7 +556,7 @@ export class QrService {
       // Store QR code reference on the plant
       await this.plantRepo.update(plant.id, { qrCodeUrl: code });
 
-      results.generated.push({ plantId: plant.id, code, qrImageBase64 });
+      results.generated.push({ plantId: plant.id, code, qrImageBase64, alreadyGenerated: 0 });
     }
 
     return {
