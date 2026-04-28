@@ -15,6 +15,7 @@ import { Payment, PaymentMethod, PaymentStatus } from '../payments/entities/paym
 import { Organization } from '../organizations/entities/organization.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { InvoiceService } from '../invoices/invoice.service';
+import { TaxService } from '../tax/tax.service';
 
 @Injectable()
 export class OrdersService {
@@ -28,6 +29,7 @@ export class OrdersService {
     @InjectRepository(Organization)
     private readonly orgRepo: Repository<Organization>,
     private readonly invoiceService: InvoiceService,
+    private readonly taxService: TaxService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -82,12 +84,21 @@ export class OrdersService {
 
       const { discountValue, discountType, discountAmount, finalTotal } =
         this.calculateDiscountTotals(subtotalAmount, dto.discount, dto.discountType);
+      const taxResult = await this.taxService.computeForAmount(
+        organizationId,
+        finalTotal,
+      );
 
       const order = manager.getRepository(Order).create({
         organizationId,
         customerName: dto.customerName,
         customerPhone: dto.customerPhone,
-        totalAmount: finalTotal,
+        totalAmount: taxResult.finalTotal,
+        subtotalAmount: Number(subtotalAmount.toFixed(2)),
+        discountAmount,
+        taxPercentage: taxResult.totalTaxPercentage,
+        taxAmount: taxResult.taxAmount,
+        taxBreakdownJson: JSON.stringify(taxResult.breakdown),
         discount: discountValue,
         discountType,
         status: OrderStatus.CONFIRMED,
@@ -117,7 +128,7 @@ export class OrdersService {
         orderId: savedOrder.id,
         organizationId,
         method: dto.paymentMethod,
-        amount: finalTotal,
+        amount: taxResult.finalTotal,
         ...(dto.paymentReference ? { referenceNumber: dto.paymentReference } : {}),
         status: PaymentStatus.COMPLETED,
       });
@@ -129,7 +140,10 @@ export class OrdersService {
         summary: {
           subtotalAmount: Number(subtotalAmount.toFixed(2)),
           discountAmount,
-          totalAmount: finalTotal,
+          taxPercentage: taxResult.totalTaxPercentage,
+          taxAmount: taxResult.taxAmount,
+          taxBreakdown: taxResult.breakdown,
+          totalAmount: taxResult.finalTotal,
         },
       };
     });

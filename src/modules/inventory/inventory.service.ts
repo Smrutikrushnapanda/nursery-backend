@@ -91,16 +91,20 @@ export class InventoryService {
        maxPrice?: number;
        minQuantity?: number;
        maxQuantity?: number;
+       activity?: string;
      } = {}
    ) {
-     // Build the base query with relations
-     const query = this.stockRepo.createQueryBuilder('stock')
-       .where('stock.organizationId = :organizationId', { organizationId })
-       .leftJoinAndSelect('stock.variant', 'variant')
-       .leftJoinAndSelect('variant.plant', 'plant')
-       .leftJoinAndSelect('plant.category', 'category')
-       .leftJoinAndSelect('plant.subcategory', 'subcategory')
-       .orderBy('variant.id', 'ASC');
+      // Build the base query with relations
+      const query = this.stockRepo.createQueryBuilder('stock')
+        .where('stock.organizationId = :organizationId', { organizationId })
+        .leftJoinAndSelect('stock.variant', 'variant')
+        .leftJoinAndSelect('variant.plant', 'plant')
+        .leftJoinAndSelect('plant.category', 'category')
+        .leftJoinAndSelect('plant.subcategory', 'subcategory')
+        // Left join with QR codes for activity filtering
+        .leftJoin('qr_codes', 'qr', `(qr.variantId = stock.variantId OR (qr.variantId IS NULL AND qr.plantId = variant.plantId))`)
+        .orderBy('variant.id', 'ASC')
+        .distinct();
 
      // Apply filters
      if (filters.category) {
@@ -131,23 +135,61 @@ export class InventoryService {
        query.andWhere('stock.quantity <= :maxQuantity', { maxQuantity: filters.maxQuantity });
      }
      
-     // Status filter (based on quantity)
-     if (filters.status) {
-       switch (filters.status.toLowerCase()) {
-         case 'in stock':
-           query.andWhere('stock.quantity > 5');
-           break;
-         case 'low stock':
-           query.andWhere('stock.quantity > 0 AND stock.quantity <= 5');
-           break;
-         case 'out of stock':
-           query.andWhere('stock.quantity <= 0');
-           break;
-         default:
-           // No filter for unknown status values
-           break;
-       }
-     }
+      // Status filter (based on quantity)
+      if (filters.status) {
+        switch (filters.status.toLowerCase()) {
+          case 'in stock':
+            query.andWhere('stock.quantity > 5');
+            break;
+          case 'low stock':
+            query.andWhere('stock.quantity > 0 AND stock.quantity <= 5');
+            break;
+          case 'out of stock':
+            query.andWhere('stock.quantity <= 0');
+            break;
+          default:
+            // No filter for unknown status values
+            break;
+        }
+      }
+
+      // Activity filter (based on QR code generation and scan activity)
+      if (filters.activity) {
+        switch (filters.activity.toLowerCase()) {
+          case 'generated':
+            query.andWhere('qr.id IS NOT NULL');
+            break;
+          case 'not_generated':
+            query.andWhere('qr.id IS NULL');
+            break;
+          case 'most_scanned':
+            query.leftJoin('qr_scan_logs', 'scanLog', 'scanLog.plantId = variant.plantId');
+            query.addSelect('COUNT(scanLog.id)', 'scanCount');
+            query.groupBy('stock.id, variant.id, plant.id, category.id, subcategory.id, qr.id');
+            query.orderBy('scanCount', 'DESC');
+            break;
+          case 'least_scanned':
+            query.leftJoin('qr_scan_logs', 'scanLog', 'scanLog.plantId = variant.plantId');
+            query.addSelect('COUNT(scanLog.id)', 'scanCount');
+            query.groupBy('stock.id, variant.id, plant.id, category.id, subcategory.id, qr.id');
+            query.orderBy('scanCount', 'ASC');
+            break;
+          case 'recently_scanned':
+            query.leftJoin('qr_scan_logs', 'scanLog', 'scanLog.plantId = variant.plantId');
+            query.addSelect('MAX(scanLog.scannedAt)', 'lastScannedAt');
+            query.groupBy('stock.id, variant.id, plant.id, category.id, subcategory.id, qr.id');
+            query.orderBy('lastScannedAt', 'DESC');
+            query.andWhere('scanLog.scannedAt IS NOT NULL');
+            break;
+          case 'never_scanned':
+            query.leftJoin('qr_scan_logs', 'scanLog', 'scanLog.plantId = variant.plantId');
+            query.andWhere('scanLog.id IS NULL');
+            break;
+          default:
+            // No filter for unknown activity values
+            break;
+        }
+      }
 
      // Execute query to get stocks with relations
      const stocks = await query.getMany();

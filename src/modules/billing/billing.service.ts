@@ -21,6 +21,7 @@ import {
   CreateManualBillDto,
   ManualBillItemDto,
 } from './dto/create-manual-bill.dto';
+import { TaxService } from '../tax/tax.service';
 
 @Injectable()
 export class BillingService {
@@ -34,6 +35,7 @@ export class BillingService {
     @InjectRepository(Payment)
     private readonly paymentRepo: Repository<Payment>,
     private readonly invoiceService: InvoiceService,
+    private readonly taxService: TaxService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -159,12 +161,22 @@ export class BillingService {
           totalPrice,
         });
       });
+      const subtotalAmount = Number(totalAmount.toFixed(2));
+      const taxResult = await this.taxService.computeForAmount(
+        organizationId,
+        subtotalAmount,
+      );
 
       const order = manager.getRepository(Order).create({
         organizationId,
         customerName: dto.customerName,
         customerPhone: dto.customerPhone,
-        totalAmount: Number(totalAmount.toFixed(2)),
+        totalAmount: taxResult.finalTotal,
+        subtotalAmount,
+        discountAmount: 0,
+        taxPercentage: taxResult.totalTaxPercentage,
+        taxAmount: taxResult.taxAmount,
+        taxBreakdownJson: JSON.stringify(taxResult.breakdown),
         status: OrderStatus.CONFIRMED,
         items: orderItems,
       });
@@ -192,14 +204,25 @@ export class BillingService {
         orderId: savedOrder.id,
         organizationId,
         method: dto.paymentMethod,
-        amount: Number(totalAmount.toFixed(2)),
+        amount: taxResult.finalTotal,
         referenceNumber: dto.paymentReference?.trim() || `MANUAL-BILL-${savedOrder.id}`,
         notes: `Manual billing created for ${dto.customerName}`,
         status: PaymentStatus.COMPLETED,
       });
       const savedPayment = await manager.getRepository(Payment).save(payment);
 
-      return { order: savedOrder, payment: savedPayment };
+      return {
+        order: savedOrder,
+        payment: savedPayment,
+        summary: {
+          subtotalAmount,
+          discountAmount: 0,
+          taxPercentage: taxResult.totalTaxPercentage,
+          taxAmount: taxResult.taxAmount,
+          taxBreakdown: taxResult.breakdown,
+          totalAmount: taxResult.finalTotal,
+        },
+      };
     });
 
     const invoiceUrl = await this.attachInvoice(

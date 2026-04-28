@@ -106,18 +106,42 @@ export class PaymentsService {
     return payment;
   }
 
-  async findAll(organizationId: string, page: number = 1, limit: number = 50) {
+  async findAll(organizationId: string, page: number = 1, limit: number = 50, filters?: {
+    method?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
     // Ensure page and limit are valid
     page = Math.max(1, page);
     limit = Math.min(500, Math.max(1, limit));
 
-    const [data, total] = await this.paymentRepo.findAndCount({
-      where: { organizationId },
-      relations: ['order'],
-      order: { createdAt: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const query = this.paymentRepo.createQueryBuilder('payment')
+      .where('payment.organizationId = :organizationId', { organizationId })
+      .leftJoinAndSelect('payment.order', 'order')
+      .orderBy('payment.createdAt', 'DESC');
+
+    // Apply filters
+    if (filters?.method) {
+      query.andWhere('payment.method = :method', { method: filters.method.toUpperCase() });
+    }
+
+    if (filters?.status) {
+      query.andWhere('payment.status = :status', { status: filters.status.toUpperCase() });
+    }
+
+    if (filters?.startDate) {
+      query.andWhere('payment.createdAt >= :startDate', { startDate: filters.startDate });
+    }
+
+    if (filters?.endDate) {
+      query.andWhere('payment.createdAt <= :endDate', { endDate: filters.endDate });
+    }
+
+    const [data, total] = await query
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
 
     return {
       data,

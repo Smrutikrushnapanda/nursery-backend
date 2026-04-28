@@ -27,26 +27,29 @@ export class CategoriesService {
     };
   }
 
-  async findAll(organizationId?: string, page?: number, limit?: number) {
+  async findAll(organizationId?: string, name?: string, page?: number, limit?: number) {
     let categories: Category[];
 
     // If pagination is requested
     if (page !== undefined || limit !== undefined) {
-      return this.findAllPaginated(organizationId, page, limit);
+      return this.findAllPaginated(organizationId, name, page, limit);
     }
 
     if (!organizationId) {
       categories = await this.categoryRepository.find({
+        where: name ? { name: name } : {},
         order: { id: 'ASC' },
       });
     } else {
-      categories = await this.categoryRepository.find({
-        where: [
-          { organizationId },
-          { organizationId: IsNull() },
-        ],
-        order: { id: 'ASC' },
-      });
+      const query = this.categoryRepository.createQueryBuilder('category')
+        .where('(category.organizationId = :organizationId OR category.organizationId IS NULL)', { organizationId });
+
+      if (name) {
+        query.andWhere('category.name = :name', { name });
+      }
+
+      query.orderBy('category.id', 'ASC');
+      categories = await query.getMany();
     }
 
     return {
@@ -56,30 +59,26 @@ export class CategoriesService {
     };
   }
 
-  async findAllPaginated(organizationId?: string, pageNum: number = 1, limitNum: number = 50) {
+  async findAllPaginated(organizationId?: string, name?: string, pageNum: number = 1, limitNum: number = 50) {
     // Ensure page and limit are valid
     pageNum = Math.max(1, pageNum);
     limitNum = Math.min(500, Math.max(1, limitNum));
 
     let [categories, total]: [Category[], number] = [[], 0];
 
-    if (!organizationId) {
-      [categories, total] = await this.categoryRepository.findAndCount({
-        order: { id: 'ASC' },
-        skip: (pageNum - 1) * limitNum,
-        take: limitNum,
-      });
-    } else {
-      [categories, total] = await this.categoryRepository.findAndCount({
-        where: [
-          { organizationId },
-          { organizationId: IsNull() },
-        ],
-        order: { id: 'ASC' },
-        skip: (pageNum - 1) * limitNum,
-        take: limitNum,
-      });
+    const query = this.categoryRepository.createQueryBuilder('category')
+      .where('(category.organizationId = :organizationId OR category.organizationId IS NULL)', { organizationId });
+
+    if (name) {
+      query.andWhere('category.name = :name', { name });
     }
+
+    query.orderBy('category.id', 'ASC');
+
+    [categories, total] = await query
+      .skip((pageNum - 1) * limitNum)
+      .take(limitNum)
+      .getManyAndCount();
 
     return {
       success: true,

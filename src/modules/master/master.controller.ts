@@ -39,6 +39,12 @@ export class MasterController {
     type: 'Number',
     description: 'Optional: Filter subcategories by category ID',
   })
+  @ApiQuery({
+    name: 'name',
+    required: false,
+    type: 'String',
+    description: 'Optional: Filter subcategories by subcategory name',
+  })
   @ApiResponse({
     status: 200,
     description: 'Returns all subcategories',
@@ -46,9 +52,10 @@ export class MasterController {
   async getDashboardSubCategories(
     @CurrentOrganization() orgId?: string,
     @Query('categoryId') categoryId?: string,
+    @Query('name') name?: string,
   ) {
     const categoryIdNum = categoryId ? parseInt(categoryId, 10) : undefined;
-    return this.masterService.getSubCategories(orgId, categoryIdNum);
+    return this.masterService.getSubCategories(orgId, categoryIdNum, name);
   }
 
   @Post('dashboard/subcategories')

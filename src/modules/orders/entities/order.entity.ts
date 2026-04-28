@@ -43,6 +43,21 @@ export class Order {
   @Column({ name: 'total_amount', type: 'decimal', precision: 10, scale: 2 })
   totalAmount: number;
 
+  @Column({ name: 'subtotal_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  subtotalAmount: number;
+
+  @Column({ name: 'discount_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  discountAmount: number;
+
+  @Column({ name: 'tax_percentage', type: 'decimal', precision: 5, scale: 2, default: 0 })
+  taxPercentage: number;
+
+  @Column({ name: 'tax_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  taxAmount: number;
+
+  @Column({ name: 'tax_breakdown_json', type: 'text', nullable: true })
+  taxBreakdownJson: string | null;
+
   @Column({ name: 'discount', type: 'decimal', precision: 10, scale: 2, default: 0, nullable: true })
   discount: number;
 

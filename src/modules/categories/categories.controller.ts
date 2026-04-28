@@ -25,14 +25,16 @@ export class CategoriesController {
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get all active categories for the organization with pagination', description: 'Retrieve all active (status=true) categories for the current organization' })
   @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })
+  @ApiQuery({ name: 'name', required: false, description: 'Filter by category name (e.g., Indoor, Outdoor, etc.)' })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 50 })
   findAll(
     @CurrentOrganization() orgId?: string,
+    @Query('name') name?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.service.findAll(orgId, page ? Number(page) : undefined, limit ? Number(limit) : undefined);
+    return this.service.findAll(orgId, name, page ? Number(page) : undefined, limit ? Number(limit) : undefined);
   }
 
   @Get(':id')

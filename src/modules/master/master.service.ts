@@ -646,26 +646,21 @@ export class MasterService implements OnModuleInit {
   async getSubCategories(
     organizationId?: string,
     categoryId?: number,
+    name?: string,
   ): Promise<Array<Omit<SubCategory, 'category'> & { categoryName: string }>> {
     if (!organizationId) {
+      const where: any = {};
       if (categoryId) {
-        const results = await this.subCategoryRepository.find({
-          relations: ['category'],
-          order: { id: 'ASC' },
-          where: { categoryId },
-        });
-        return results.map((sub) => {
-          const { category, ...rest } = sub;
-          return {
-            ...rest,
-            categoryName: category?.name || '',
-          };
-        });
+        where.categoryId = categoryId;
+      }
+      if (name) {
+        where.name = name;
       }
 
       const results = await this.subCategoryRepository.find({
         relations: ['category'],
         order: { id: 'ASC' },
+        where: Object.keys(where).length > 0 ? where : {},
       });
       return results.map((sub) => {
         const { category, ...rest } = sub;
@@ -677,27 +672,26 @@ export class MasterService implements OnModuleInit {
     }
 
     await this.ensureTenantMasterData(organizationId);
-    if (categoryId) {
-      const results = await this.subCategoryRepository.find({
-        relations: ['category'],
-        order: { id: 'ASC' },
-        where: [
-          { organizationId, categoryId },
-          { organizationId: IsNull(), categoryId },
-        ],
-      });
-      return results.map((sub) => {
-        const { category, ...rest } = sub;
-        return {
-          ...rest,
-          categoryName: category?.name || '',
-        };
-      });
+    
+    const where: any[] = [];
+    if (categoryId && name) {
+      where.push({ organizationId, categoryId, name });
+      where.push({ organizationId: IsNull(), categoryId, name });
+    } else if (categoryId) {
+      where.push({ organizationId, categoryId });
+      where.push({ organizationId: IsNull(), categoryId });
+    } else if (name) {
+      where.push({ organizationId, name });
+      where.push({ organizationId: IsNull(), name });
+    } else {
+      where.push({ organizationId });
+      where.push({ organizationId: IsNull() });
     }
+
     const results = await this.subCategoryRepository.find({
       relations: ['category'],
       order: { id: 'ASC' },
-      where: [{ organizationId }, { organizationId: IsNull() }],
+      where,
     });
     return results.map((sub) => {
       const { category, ...rest } = sub;

@@ -32,18 +32,42 @@ export class PaymentsController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all payments for the organization with pagination' })
+  @ApiOperation({ summary: 'Get all payments for the organization with pagination and filters' })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 50 })
+  @ApiQuery({ 
+    name: 'method', 
+    required: false, 
+    description: 'Filter by payment method',
+    enum: ['CASH', 'UPI', 'CARD', 'BANK_TRANSFER']
+  })
+  @ApiQuery({ 
+    name: 'status', 
+    required: false, 
+    description: 'Filter by payment status',
+    enum: ['PENDING', 'COMPLETED', 'FAILED', 'REFUNDED']
+  })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Filter by start date (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Filter by end date (YYYY-MM-DD)' })
   findAll(
     @Request() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('method') method?: string,
+    @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
     return this.paymentsService.findAll(
       req.user.organizationId,
       page ? Number(page) : 1,
       limit ? Number(limit) : 50,
+      {
+        method,
+        status,
+        startDate,
+        endDate,
+      },
     );
   }
 

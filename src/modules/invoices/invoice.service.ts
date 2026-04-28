@@ -9,6 +9,12 @@ import { Order } from '../orders/entities/order.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 
+type TaxLine = {
+  taxType: string;
+  percentage: number;
+  amount: number;
+};
+
 @Injectable()
 export class InvoiceService {
   private readonly logger = new Logger(InvoiceService.name);
@@ -18,6 +24,29 @@ export class InvoiceService {
     this.invoiceDir = path.resolve(process.cwd(), 'invoices');
     if (!fs.existsSync(this.invoiceDir)) {
       fs.mkdirSync(this.invoiceDir, { recursive: true });
+    }
+  }
+
+  private parseTaxBreakdown(raw: string | null | undefined): TaxLine[] {
+    if (!raw) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+
+      return parsed
+        .map((line): TaxLine => ({
+          taxType: typeof line?.taxType === 'string' ? line.taxType : 'Tax',
+          percentage: Number(line?.percentage ?? 0),
+          amount: Number(line?.amount ?? 0),
+        }))
+        .filter((line) => Number.isFinite(line.amount) && line.amount > 0);
+    } catch {
+      return [];
     }
   }
 
@@ -114,14 +143,21 @@ export class InvoiceService {
       doc.moveTo(50, rowY + 5).lineTo(545, rowY + 5).strokeColor('#cccccc').stroke();
       rowY += 15;
 
-      const subtotalAmount = order.items.reduce(
+      const computedSubtotal = order.items.reduce(
         (sum, item) => sum + Number(item.totalPrice),
         0,
       );
+      const subtotalAmount = Number(
+        Number(order.subtotalAmount ?? computedSubtotal).toFixed(2),
+      );
       const discountAmount =
-        order.discountType === 'percentage'
-          ? (subtotalAmount * Math.min(Number(order.discount ?? 0), 100)) / 100
-          : Math.min(Number(order.discount ?? 0), subtotalAmount);
+        order.discountAmount !== undefined && order.discountAmount !== null
+          ? Number(order.discountAmount)
+          : order.discountType === 'percentage'
+            ? (subtotalAmount * Math.min(Number(order.discount ?? 0), 100)) / 100
+            : Math.min(Number(order.discount ?? 0), subtotalAmount);
+      const taxLines = this.parseTaxBreakdown(order.taxBreakdownJson);
+      const fallbackTaxAmount = Number(order.taxAmount ?? 0);
 
       doc.fontSize(11).font('Helvetica')
         .text('Subtotal:', col.price, rowY, { width: 70, align: 'right' })
@@ -135,6 +171,22 @@ export class InvoiceService {
             : 'Discount';
         doc.text(`${discountLabel}:`, col.price, rowY, { width: 70, align: 'right' })
           .text(`-₹${discountAmount.toFixed(2)}`, col.total, rowY);
+        rowY += 18;
+      }
+
+      if (taxLines.length > 0) {
+        for (const tax of taxLines) {
+          doc.text(
+            `${tax.taxType} (${Number(tax.percentage).toFixed(2)}%):`,
+            col.price,
+            rowY,
+            { width: 70, align: 'right' },
+          ).text(`₹${Number(tax.amount).toFixed(2)}`, col.total, rowY);
+          rowY += 18;
+        }
+      } else if (fallbackTaxAmount > 0) {
+        doc.text('Tax:', col.price, rowY, { width: 70, align: 'right' })
+          .text(`₹${fallbackTaxAmount.toFixed(2)}`, col.total, rowY);
         rowY += 18;
       }
 

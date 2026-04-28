@@ -11,6 +11,7 @@ import { Order } from '../orders/entities/order.entity';
 import { OrderItem } from '../orders/entities/order-item.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { InvoiceModule } from '../invoices/invoice.module';
+import { TaxModule } from '../tax/tax.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { InvoiceModule } from '../invoices/invoice.module';
       Organization,
     ]),
     InvoiceModule,
+    TaxModule,
   ],
   controllers: [BillingController],
   providers: [BillingService],

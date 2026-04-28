@@ -23,6 +23,7 @@ import { PlansModule } from './modules/plans/plans.module';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { EmailModule } from './modules/email/email.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { TaxModule } from './modules/tax/tax.module';
 import { ensureQrCodeSchema } from './database/ensure-qr-code-schema';
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -135,6 +136,7 @@ function getDatabaseType(databaseUrl: string): TypeOrmModuleOptions['type'] {
     SubscriptionsModule,
     EmailModule,
     BillingModule,
+    TaxModule,
   ],
   controllers: [AppController],
   providers: [AppService],

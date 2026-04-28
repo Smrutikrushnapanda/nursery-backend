@@ -9,12 +9,14 @@ import { Cart } from '../cart/cart.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { InventoryModule } from '../inventory/inventory.module';
 import { InvoiceModule } from '../invoices/invoice.module';
+import { TaxModule } from '../tax/tax.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, OrderItem, PlantVariant, Cart, Organization]),
     InventoryModule,
     InvoiceModule,
+    TaxModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],
