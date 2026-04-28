@@ -659,6 +659,7 @@ export class QrService {
     const results = {
       generated: [] as Array<{
         plantId: number;
+        plantName: string;
         variantId: number | null;
         variantSize: string | null;
         code: string;
@@ -682,6 +683,7 @@ export class QrService {
         const qrData = await this.generate(plant.id, organizationId, null);
         results.generated.push({
           plantId: plant.id,
+          plantName: plant.name,
           variantId: null,
           variantSize: null,
           code: qrData.code,
@@ -695,6 +697,7 @@ export class QrService {
         const qrData = await this.generate(plant.id, organizationId, variant.id);
         results.generated.push({
           plantId: plant.id,
+          plantName: plant.name,
           variantId: variant.id,
           variantSize: variant.size,
           code: qrData.code,
