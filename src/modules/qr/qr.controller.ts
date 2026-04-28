@@ -273,12 +273,32 @@ export class QrController {
     @Query('categoryId') categoryId?: string,
     @Query('subcategoryId') subcategoryId?: string,
     @Query('plantIds') plantIds?: string,
+    @Body('plantIds') bodyPlantIds?: string | number[],
   ) {
-    const plantIdArray = plantIds ? plantIds.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id)) : undefined;
+    const queryPlantIds = plantIds
+      ? plantIds
+          .split(',')
+          .map((id) => parseInt(id.trim(), 10))
+          .filter((id) => !isNaN(id))
+      : [];
+
+    const payloadPlantIds = Array.isArray(bodyPlantIds)
+      ? bodyPlantIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0)
+      : typeof bodyPlantIds === 'string'
+        ? bodyPlantIds
+            .split(',')
+            .map((id) => parseInt(id.trim(), 10))
+            .filter((id) => !isNaN(id))
+        : [];
+
+    const mergedPlantIds = Array.from(new Set([...queryPlantIds, ...payloadPlantIds]));
+
     return this.qrService.generateBulk(req.user.organizationId, {
       categoryId: categoryId ? +categoryId : undefined,
       subcategoryId: subcategoryId ? +subcategoryId : undefined,
-      plantIds: plantIdArray,
+      plantIds: mergedPlantIds.length > 0 ? mergedPlantIds : undefined,
     });
   }
 
@@ -306,10 +326,35 @@ export class QrController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get QR scan analytics summary' })
   @ApiQuery({ name: 'days', required: false, type: Number, description: 'Number of days to analyze (default 30)' })
+  @ApiQuery({
+    name: 'activity',
+    required: false,
+    enum: ['high', 'moderate', 'low'],
+    description: 'Filter analytics by activity level bucket',
+  })
+  @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Start date (ISO string)' })
+  @ApiQuery({ name: 'endDate', required: false, type: String, description: 'End date (ISO string)' })
   @UseGuards(AuthGuard('jwt'))
   @Get('analytics/summary')
-  getScanAnalytics(@Request() req: any, @Query('days') days?: string) {
-    return this.qrService.getScanAnalytics(req.user.organizationId, days ? +days : 30);
+  getScanAnalytics(
+    @Request() req: any,
+    @Query('days') days?: string,
+    @Query('activity') activity?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    const normalizedActivity =
+      activity && ['high', 'moderate', 'low'].includes(activity.toLowerCase())
+        ? (activity.toLowerCase() as 'high' | 'moderate' | 'low')
+        : undefined;
+
+    return this.qrService.getScanAnalytics(
+      req.user.organizationId,
+      days ? +days : 30,
+      normalizedActivity,
+      startDate ? new Date(startDate) : undefined,
+      endDate ? new Date(endDate) : undefined,
+    );
   }
 
   @ApiBearerAuth()

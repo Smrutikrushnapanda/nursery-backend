@@ -19,18 +19,24 @@ export class LogReportController {
   @ApiQuery({ name: 'method', required: false, example: 'POST' })
   @ApiQuery({ name: 'userId', required: false })
   @ApiQuery({ name: 'status', required: false, example: 201 })
+  @ApiQuery({ name: 'ip', required: false, example: '127.0.0.1' })
   @ApiQuery({ name: 'endpoint', required: false, example: '/plants' })
   @ApiQuery({ name: 'from', required: false, example: '2026-04-01' })
   @ApiQuery({ name: 'to', required: false, example: '2026-04-30' })
+  @ApiQuery({ name: 'startDate', required: false, example: '2026-04-01' })
+  @ApiQuery({ name: 'endDate', required: false, example: '2026-04-30' })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 50 })
   findAll(
     @Query('method') method?: string,
     @Query('userId') userId?: string,
     @Query('status') status?: string,
+    @Query('ip') ip?: string,
     @Query('endpoint') endpoint?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -38,9 +44,12 @@ export class LogReportController {
       method,
       userId,
       status: status ? Number(status) : undefined,
+      ip,
       endpoint,
       from,
       to,
+      startDate,
+      endDate,
       page: page ? Number(page) : 1,
       limit: limit ? Number(limit) : 50,
     });

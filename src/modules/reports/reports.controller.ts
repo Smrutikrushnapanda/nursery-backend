@@ -63,11 +63,34 @@ export class ReportsController {
 
   @Get('inventory-value')
   @ApiOperation({ summary: 'Get current inventory valuation report' })
+  @ApiQuery({ name: 'plantName', required: false, type: String, description: 'Filter by plant name (contains)' })
+  @ApiQuery({ name: 'size', required: false, type: String, description: 'Filter by variant size' })
+  @ApiQuery({ name: 'stock', required: false, type: Number, description: 'Minimum stock quantity filter' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['active', 'inactive', 'in_stock', 'out_of_stock'],
+    description: 'Status filter',
+  })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max items to return' })
   @ApiResponse({
     status: 200,
     description: 'Inventory valuation report fetched successfully',
   })
-  getInventoryValue(@CurrentOrganization() orgId: string) {
-    return this.reportsService.getInventoryValue(orgId);
+  getInventoryValue(
+    @CurrentOrganization() orgId: string,
+    @Query('plantName') plantName?: string,
+    @Query('size') size?: string,
+    @Query('stock') stock?: string,
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.reportsService.getInventoryValue(orgId, {
+      plantName,
+      size,
+      stock: stock ? Number(stock) : undefined,
+      status,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 }

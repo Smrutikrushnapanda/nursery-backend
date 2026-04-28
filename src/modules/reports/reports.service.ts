@@ -71,8 +71,17 @@ export class ReportsService {
     }));
   }
 
-  async getInventoryValue(organizationId: string) {
-    const rows = await this.stockRepo
+  async getInventoryValue(
+    organizationId: string,
+    filters?: {
+      plantName?: string;
+      size?: string;
+      stock?: number;
+      status?: string;
+      limit?: number;
+    },
+  ) {
+    const qb = this.stockRepo
       .createQueryBuilder('ps')
       .innerJoin('ps.variant', 'v')
       .innerJoin('v.plant', 'p')
@@ -84,17 +93,49 @@ export class ReportsService {
       .addSelect('v.price', 'unitPrice')
       .addSelect('ps.quantity', 'stockQty')
       .addSelect('CAST(v.price AS DECIMAL) * ps.quantity', 'stockValue')
-      .where('ps.organizationId = :organizationId', { organizationId })
-      .getRawMany<{
-        plantId: number;
-        plantName: string;
-        variantId: number;
-        size: string;
-        sku: string;
-        unitPrice: string;
-        stockQty: number;
-        stockValue: string;
-      }>();
+      .where('ps.organizationId = :organizationId', { organizationId });
+
+    if (filters?.plantName) {
+      qb.andWhere('p.name ILIKE :plantName', {
+        plantName: `%${filters.plantName.trim()}%`,
+      });
+    }
+
+    if (filters?.size) {
+      qb.andWhere('v.size = :size', { size: filters.size.toUpperCase() });
+    }
+
+    if (filters?.stock !== undefined && Number.isFinite(filters.stock)) {
+      qb.andWhere('ps.quantity >= :minStock', { minStock: filters.stock });
+    }
+
+    if (filters?.status) {
+      const normalizedStatus = filters.status.toLowerCase();
+      if (normalizedStatus === 'active') {
+        qb.andWhere('v.status = true').andWhere('p.status = true');
+      } else if (normalizedStatus === 'inactive') {
+        qb.andWhere('(v.status = false OR p.status = false)');
+      } else if (normalizedStatus === 'in_stock') {
+        qb.andWhere('ps.quantity > 0');
+      } else if (normalizedStatus === 'out_of_stock') {
+        qb.andWhere('ps.quantity <= 0');
+      }
+    }
+
+    if (filters?.limit && Number.isFinite(filters.limit) && filters.limit > 0) {
+      qb.limit(Math.min(500, Math.floor(filters.limit)));
+    }
+
+    const rows = await qb.getRawMany<{
+      plantId: number;
+      plantName: string;
+      variantId: number;
+      size: string;
+      sku: string;
+      unitPrice: string;
+      stockQty: number;
+      stockValue: string;
+    }>();
 
     const totalValue = rows.reduce((sum, r) => sum + parseFloat(r.stockValue ?? '0'), 0);
 

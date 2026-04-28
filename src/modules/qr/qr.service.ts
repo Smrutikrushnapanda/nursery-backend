@@ -622,33 +622,28 @@ export class QrService {
     subcategoryId?: number;
     plantIds?: number[];
   }) {
-    // Build query for plants based on filters (OR logic for plantIds with category/subcategory)
+    // Build query for plants based on filters (AND logic for precise targeting)
     const query = this.plantRepo
       .createQueryBuilder('plant')
       .where('plant.organizationId = :organizationId', { organizationId })
       .andWhere('plant.status = :status', { status: true });
 
-    const conditions: string[] = [];
-    const params: Record<string, any> = { organizationId, status: true };
-
     if (filters.categoryId) {
-      conditions.push('plant.categoryId = :categoryId');
-      params.categoryId = filters.categoryId;
+      query.andWhere('plant.categoryId = :categoryId', {
+        categoryId: filters.categoryId,
+      });
     }
 
     if (filters.subcategoryId) {
-      conditions.push('plant.subcategoryId = :subcategoryId');
-      params.subcategoryId = filters.subcategoryId;
+      query.andWhere('plant.subcategoryId = :subcategoryId', {
+        subcategoryId: filters.subcategoryId,
+      });
     }
 
     if (filters.plantIds && filters.plantIds.length > 0) {
-      conditions.push('plant.id IN (:...plantIds)');
-      params.plantIds = filters.plantIds;
-    }
-
-    // Add OR conditions if any filter is present
-    if (conditions.length > 0) {
-      query.andWhere(`(${conditions.join(' OR ')})`, params);
+      query.andWhere('plant.id IN (:...plantIds)', {
+        plantIds: filters.plantIds,
+      });
     }
 
     const plants = await query.getMany();
@@ -656,55 +651,66 @@ export class QrService {
     if (plants.length === 0) {
       return {
         generated: [],
-        skipped: [],
-        summary: { total: 0, generated: 0, skipped: 0 },
+        skipped: [] as Array<never>,
+        summary: { total: 0, plants: 0, generated: 0, skipped: 0 },
       };
     }
 
     const results = {
-      generated: [] as Array<{ plantId: number; code: string; qrImageBase64: string; alreadyGenerated: number }>,
-      skipped: [] as Array<{ plantId: number; code: string; qrImageBase64: string; reason: string; alreadyGenerated: number }>,
+      generated: [] as Array<{
+        plantId: number;
+        variantId: number | null;
+        variantSize: string | null;
+        code: string;
+        qrImageBase64: string;
+        alreadyGenerated: number;
+      }>,
+      skipped: [] as Array<never>,
     };
 
     for (const plant of plants) {
-      // Check if QR already exists
-      const existing = await this.qrRepo.findOne({ where: { plantId: plant.id } });
-      if (existing) {
-        results.skipped.push({ 
-          plantId: plant.id, 
-          code: existing.code,
-          qrImageBase64: existing.qrImageBase64,
-          reason: 'QR code already exists', 
-          alreadyGenerated: 1 
+      const activeVariants = await this.variantRepo.find({
+        where: {
+          plantId: plant.id,
+          organizationId,
+          status: true,
+        },
+        order: { id: 'ASC' },
+      });
+
+      if (activeVariants.length === 0) {
+        const qrData = await this.generate(plant.id, organizationId, null);
+        results.generated.push({
+          plantId: plant.id,
+          variantId: null,
+          variantSize: null,
+          code: qrData.code,
+          qrImageBase64: qrData.qrImageBase64,
+          alreadyGenerated: qrData.alreadyGenerated,
         });
         continue;
       }
 
-      // Generate new QR code
-      const code = this.buildPlantQrUrl(plant.id);
-      const qrImageBase64 = await QRCode.toDataURL(code);
-
-      const qrCode = this.qrRepo.create({
-        code,
-        plantId: plant.id,
-        organizationId,
-        qrImageBase64,
-      });
-
-      await this.qrRepo.save(qrCode);
-
-      // Store QR code reference on the plant
-      await this.plantRepo.update(plant.id, { qrCodeUrl: code });
-
-      results.generated.push({ plantId: plant.id, code, qrImageBase64, alreadyGenerated: 0 });
+      for (const variant of activeVariants) {
+        const qrData = await this.generate(plant.id, organizationId, variant.id);
+        results.generated.push({
+          plantId: plant.id,
+          variantId: variant.id,
+          variantSize: variant.size,
+          code: qrData.code,
+          qrImageBase64: qrData.qrImageBase64,
+          alreadyGenerated: qrData.alreadyGenerated,
+        });
+      }
     }
 
     return {
       ...results,
       summary: {
-        total: plants.length,
+        total: results.generated.length,
+        plants: plants.length,
         generated: results.generated.length,
-        skipped: results.skipped.length,
+        skipped: 0,
       },
     };
   }
@@ -744,34 +750,103 @@ export class QrService {
     }));
   }
 
-  async getScanAnalytics(organizationId: string, days: number = 30) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+  async getScanAnalytics(
+    organizationId: string,
+    days: number = 30,
+    activity?: 'high' | 'moderate' | 'low',
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const now = new Date();
+    const effectiveEndDate = endDate ?? now;
+    const effectiveStartDate = startDate
+      ? startDate
+      : (() => {
+          const d = new Date(effectiveEndDate);
+          d.setDate(d.getDate() - days);
+          return d;
+        })();
 
-    // Count total scans in period
-    const totalScans = await this.scanLogRepo
+    const plantCountsRaw = await this.scanLogRepo
+      .createQueryBuilder('scanLog')
+      .select('scanLog.plantId', 'plantId')
+      .addSelect('COUNT(*)', 'scanCount')
+      .where('scanLog.organizationId = :organizationId', { organizationId })
+      .andWhere('scanLog.scannedAt >= :startDate', { startDate: effectiveStartDate })
+      .andWhere('scanLog.scannedAt <= :endDate', { endDate: effectiveEndDate })
+      .groupBy('scanLog.plantId')
+      .getRawMany<{ plantId: string; scanCount: string }>();
+
+    const classifyActivity = (count: number): 'high' | 'moderate' | 'low' => {
+      if (count >= 50) return 'high';
+      if (count >= 15) return 'moderate';
+      return 'low';
+    };
+
+    const filteredPlantIds = activity
+      ? plantCountsRaw
+          .filter((row) => classifyActivity(parseInt(row.scanCount || '0', 10)) === activity)
+          .map((row) => parseInt(row.plantId, 10))
+      : undefined;
+
+    if (activity && (!filteredPlantIds || filteredPlantIds.length === 0)) {
+      return {
+        totalScans: 0,
+        uniquePlantsScanned: 0,
+        uniqueScanners: 0,
+        scannedBySeller: 0,
+        scannedByBuyer: 0,
+        periodDays: Math.max(
+          1,
+          Math.ceil(
+            (effectiveEndDate.getTime() - effectiveStartDate.getTime()) /
+              (1000 * 60 * 60 * 24),
+          ),
+        ),
+        activityFilter: activity,
+        dateRange: {
+          startDate: effectiveStartDate.toISOString(),
+          endDate: effectiveEndDate.toISOString(),
+        },
+        dailyScans: [],
+      };
+    }
+
+    const totalScansQb = this.scanLogRepo
       .createQueryBuilder('scanLog')
       .select('COUNT(*)', 'count')
       .where('scanLog.organizationId = :organizationId', { organizationId })
-      .andWhere('scanLog.scannedAt >= :startDate', { startDate })
-      .getRawOne();
+      .andWhere('scanLog.scannedAt >= :startDate', { startDate: effectiveStartDate })
+      .andWhere('scanLog.scannedAt <= :endDate', { endDate: effectiveEndDate });
+    if (filteredPlantIds && filteredPlantIds.length > 0) {
+      totalScansQb.andWhere('scanLog.plantId IN (:...plantIds)', { plantIds: filteredPlantIds });
+    }
+    const totalScans = await totalScansQb.getRawOne();
 
-    const uniquePlants = await this.scanLogRepo
+    const uniquePlantsQb = this.scanLogRepo
       .createQueryBuilder('scanLog')
       .select('COUNT(DISTINCT scanLog.plantId)', 'count')
       .where('scanLog.organizationId = :organizationId', { organizationId })
-      .andWhere('scanLog.scannedAt >= :startDate', { startDate })
-      .getRawOne();
+      .andWhere('scanLog.scannedAt >= :startDate', { startDate: effectiveStartDate })
+      .andWhere('scanLog.scannedAt <= :endDate', { endDate: effectiveEndDate });
+    if (filteredPlantIds && filteredPlantIds.length > 0) {
+      uniquePlantsQb.andWhere('scanLog.plantId IN (:...plantIds)', { plantIds: filteredPlantIds });
+    }
+    const uniquePlants = await uniquePlantsQb.getRawOne();
 
-    const uniqueScanners = await this.scanLogRepo
+    const uniqueScannersQb = this.scanLogRepo
       .createQueryBuilder('scanLog')
       .select('COUNT(DISTINCT scanLog.scannedBy)', 'count')
       .where('scanLog.organizationId = :organizationId', { organizationId })
-      .andWhere('scanLog.scannedAt >= :startDate', { startDate })
-      .andWhere('scanLog.scannedBy IS NOT NULL')
-      .getRawOne();
+      .andWhere('scanLog.scannedAt >= :startDate', { startDate: effectiveStartDate })
+      .andWhere('scanLog.scannedAt <= :endDate', { endDate: effectiveEndDate })
+      .andWhere('scanLog.scannedBy IS NOT NULL');
+    if (filteredPlantIds && filteredPlantIds.length > 0) {
+      uniqueScannersQb.andWhere('scanLog.plantId IN (:...plantIds)', { plantIds: filteredPlantIds });
+    }
+    const uniqueScanners = await uniqueScannersQb.getRawOne();
 
-    const scanSourceCounts = await this.scanLogRepo
+    const scanSourceCountsQb = this.scanLogRepo
       .createQueryBuilder('scanLog')
       .select(
         'SUM(CASE WHEN scanLog.scannedBy IS NOT NULL THEN 1 ELSE 0 END)',
@@ -782,19 +857,26 @@ export class QrService {
         'buyerCount',
       )
       .where('scanLog.organizationId = :organizationId', { organizationId })
-      .andWhere('scanLog.scannedAt >= :startDate', { startDate })
-      .getRawOne();
+      .andWhere('scanLog.scannedAt >= :startDate', { startDate: effectiveStartDate })
+      .andWhere('scanLog.scannedAt <= :endDate', { endDate: effectiveEndDate });
+    if (filteredPlantIds && filteredPlantIds.length > 0) {
+      scanSourceCountsQb.andWhere('scanLog.plantId IN (:...plantIds)', { plantIds: filteredPlantIds });
+    }
+    const scanSourceCounts = await scanSourceCountsQb.getRawOne();
 
-    // Get daily scan counts for the last 30 days
-    const dailyScans = await this.scanLogRepo
+    const dailyScansQb = this.scanLogRepo
       .createQueryBuilder('scanLog')
       .select('DATE(scanLog.scannedAt)', 'date')
       .addSelect('COUNT(*)', 'count')
       .where('scanLog.organizationId = :organizationId', { organizationId })
-      .andWhere('scanLog.scannedAt >= :startDate', { startDate })
+      .andWhere('scanLog.scannedAt >= :startDate', { startDate: effectiveStartDate })
+      .andWhere('scanLog.scannedAt <= :endDate', { endDate: effectiveEndDate })
       .groupBy('DATE(scanLog.scannedAt)')
-      .orderBy('date', 'ASC')
-      .getRawMany();
+      .orderBy('date', 'ASC');
+    if (filteredPlantIds && filteredPlantIds.length > 0) {
+      dailyScansQb.andWhere('scanLog.plantId IN (:...plantIds)', { plantIds: filteredPlantIds });
+    }
+    const dailyScans = await dailyScansQb.getRawMany();
 
     return {
       totalScans: parseInt(totalScans?.count || '0'),
@@ -802,7 +884,18 @@ export class QrService {
       uniqueScanners: parseInt(uniqueScanners?.count || '0'),
       scannedBySeller: parseInt(scanSourceCounts?.sellerCount || '0'),
       scannedByBuyer: parseInt(scanSourceCounts?.buyerCount || '0'),
-      periodDays: days,
+      periodDays: Math.max(
+        1,
+        Math.ceil(
+          (effectiveEndDate.getTime() - effectiveStartDate.getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      ),
+      activityFilter: activity ?? null,
+      dateRange: {
+        startDate: effectiveStartDate.toISOString(),
+        endDate: effectiveEndDate.toISOString(),
+      },
       dailyScans,
     };
   }

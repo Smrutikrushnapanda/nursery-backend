@@ -7,9 +7,12 @@ export interface LogReportFilter {
   method?: string;
   userId?: string;
   status?: number;
+  ip?: string;
   endpoint?: string;
   from?: string;
   to?: string;
+  startDate?: string;
+  endDate?: string;
   page?: number;
   limit?: number;
 }
@@ -40,14 +43,19 @@ export class LogReportService {
     if (filter.status) {
       qb.andWhere('l.statusCode = :statusCode', { statusCode: filter.status });
     }
+    if (filter.ip) {
+      qb.andWhere('l.ip ILIKE :ip', { ip: `%${filter.ip}%` });
+    }
     if (filter.endpoint) {
       qb.andWhere('l.endpoint ILIKE :endpoint', { endpoint: `%${filter.endpoint}%` });
     }
-    if (filter.from) {
-      qb.andWhere('l.createdAt >= :from', { from: new Date(filter.from) });
+    const startDate = filter.startDate ?? filter.from;
+    const endDate = filter.endDate ?? filter.to;
+    if (startDate) {
+      qb.andWhere('l.createdAt >= :from', { from: new Date(startDate) });
     }
-    if (filter.to) {
-      qb.andWhere('l.createdAt <= :to', { to: new Date(filter.to) });
+    if (endDate) {
+      qb.andWhere('l.createdAt <= :to', { to: new Date(endDate) });
     }
 
     const [rows, total] = await qb.getManyAndCount();
