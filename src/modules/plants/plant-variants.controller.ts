@@ -43,19 +43,24 @@ export class PlantVariantsController {
     required: false,
     description: 'Filter variants by plant id',
   })
+  @ApiQuery({ name: 'size', required: false, description: 'Filter by variant size (TINY, SMALL, MEDIUM, LARGE, EXTRA_LARGE)' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status (true/false)' })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 50 })
   findAll(
     @CurrentOrganization() orgId: string | undefined,
     @Query('plantId') plantId?: string,
+    @Query('size') size?: string,
+    @Query('status') status?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
+    const parsedPlantId = this.parseOptionalPlantId(plantId);
     // Check if pagination is requested
     if (page !== undefined || limit !== undefined) {
-      return this.service.findAll(orgId, page ? Number(page) : 1, limit ? Number(limit) : 50);
+      return this.service.findAll(orgId, page ? Number(page) : 1, limit ? Number(limit) : 50, undefined, size, status);
     }
-    return this.service.findAll(orgId, this.parseOptionalPlantId(plantId));
+    return this.service.findAll(orgId, parsedPlantId, undefined, undefined, size, status);
   }
 
   @Get(':id')

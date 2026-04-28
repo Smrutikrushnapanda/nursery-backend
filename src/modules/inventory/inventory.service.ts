@@ -329,6 +329,43 @@ export class InventoryService {
     return { message: 'Stock deleted successfully' };
   }
 
+  async deleteAllStock(organizationId: string) {
+    // Delete all stock records for the organization
+    const result = await this.dataSource.transaction(async (manager) => {
+      // Get all stocks to log the deletion
+      const allStocks = await manager.getRepository(PlantStock).find({
+        where: { organizationId },
+      });
+
+      // Create log entries for all deleted stocks
+      const logEntries = allStocks.map((stock) =>
+        manager.getRepository(StockLog).create({
+          variantId: stock.variantId,
+          organizationId,
+          type: StockLogType.ADJUST,
+          quantity: -stock.quantity,
+          reference: 'All stock deleted/cleared',
+        }),
+      );
+
+      if (logEntries.length > 0) {
+        await manager.getRepository(StockLog).save(logEntries);
+      }
+
+      // Delete all stock records
+      const deleteResult = await manager.getRepository(PlantStock).delete({
+        organizationId,
+      });
+
+      return deleteResult;
+    });
+
+    return {
+      message: `Successfully deleted stock for ${result.affected} variants`,
+      deletedCount: result.affected,
+    };
+  }
+
   private async applyStockChange(
     organizationId: string,
     variantId: number,

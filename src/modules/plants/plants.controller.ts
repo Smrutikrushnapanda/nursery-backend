@@ -126,11 +126,11 @@ export class PlantsController {
 
 @Get()
   @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Get All Plants', description: 'Get all plants. Optionally filter by categoryId or subcategoryId using query parameters.' })
+  @ApiOperation({ summary: 'Get All Plants', description: 'Get all plants. Optionally filter by categoryId, subcategoryId, or use pagination. Supports both traditional query-based and paginated responses.' })
   @ApiQuery({ name: 'categoryId', required: false, description: 'Filter by category ID', type: Number })
   @ApiQuery({ name: 'subcategoryId', required: false, description: 'Filter by subcategory ID', type: Number })
-  @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  @ApiQuery({ name: 'page', required: false, example: 1, description: 'Page number for pagination' })
+  @ApiQuery({ name: 'limit', required: false, example: 50, description: 'Items per page' })
   findAll(
     @CurrentOrganization() orgId: string | undefined,
     @Query('categoryId') categoryId?: string,

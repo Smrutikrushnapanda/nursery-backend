@@ -61,13 +61,13 @@ export class PlantVariantsService {
     }
   }
 
-  async findAll(orgId: string | undefined, plantIdOrPage?: number | string, pageOrUndefined?: number, limit?: number) {
+  async findAll(orgId: string | undefined, plantIdOrPage?: number | string, pageOrUndefined?: number, limit?: number, size?: string, status?: string) {
     // Check if pagination is being used
     const isPageination = typeof plantIdOrPage === 'number' && !isNaN(plantIdOrPage as number) && (pageOrUndefined !== undefined || limit !== undefined);
     
     if (isPageination) {
       // New API: findAll(orgId, page, limit)
-      return this.findAllPaginated(orgId, plantIdOrPage as number, pageOrUndefined || 50);
+      return this.findAllPaginated(orgId, plantIdOrPage as number, pageOrUndefined || 50, size, status);
     }
 
     // Original API: findAll(orgId, plantId?)
@@ -90,11 +90,22 @@ export class PlantVariantsService {
       query.where('variant.plantId = :plantId', { plantId });
     }
 
+    // Apply size filter
+    if (size && size !== '' && size !== 'undefined') {
+      query.andWhere('variant.size = :size', { size });
+    }
+
+    // Apply status filter
+    if (status !== undefined && status !== '' && status !== 'undefined') {
+      const statusBool = status === 'true' || status === '1';
+      query.andWhere('variant.status = :status', { status: statusBool });
+    }
+
     const variants = await query.getMany();
     return this.enrichVariantsWithStockStatus(variants);
   }
 
-  async findAllPaginated(orgId: string | undefined, pageNum: number = 1, limitNum: number = 50) {
+  async findAllPaginated(orgId: string | undefined, pageNum: number = 1, limitNum: number = 50, size?: string, status?: string) {
     // Ensure page and limit are valid
     pageNum = Math.max(1, pageNum);
     limitNum = Math.min(500, Math.max(1, limitNum));
@@ -107,6 +118,17 @@ export class PlantVariantsService {
 
     if (orgId) {
       query.where('variant.organizationId = :orgId', { orgId });
+    }
+
+    // Apply size filter
+    if (size && size !== '' && size !== 'undefined') {
+      query.andWhere('variant.size = :size', { size });
+    }
+
+    // Apply status filter
+    if (status !== undefined && status !== '' && status !== 'undefined') {
+      const statusBool = status === 'true' || status === '1';
+      query.andWhere('variant.status = :status', { status: statusBool });
     }
 
     const [variants, total] = await query

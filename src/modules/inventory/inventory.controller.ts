@@ -10,7 +10,7 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags, ApiParam } from '@nestjs/swagger';
 import { CurrentOrganization } from '../../common/decorators/current-organization.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import {
@@ -84,25 +84,47 @@ export class InventoryController {
     );
   }
 
-  @Delete(':variantId')
-  @ApiOperation({ summary: 'Delete/clear stock for a plant variant' })
-  deleteStock(
-    @Param('variantId', ParseIntPipe) variantId: number,
+  @Get()
+  @ApiOperation({ summary: 'Get all stock records for the organization' })
+  getAllStockRecords(
     @CurrentOrganization() organizationId?: string,
   ) {
-    return this.inventoryService.deleteStock(
+    return this.inventoryService.getAllStock(
       this.requireOrganization(organizationId),
-      variantId,
     );
   }
 
   @Get(':variantId')
   @ApiOperation({ summary: 'Get current stock by variant id' })
+  @ApiParam({ name: 'variantId', type: Number, description: 'Plant variant ID', required: true })
   getStock(
     @Param('variantId', ParseIntPipe) variantId: number,
     @CurrentOrganization() organizationId?: string,
   ) {
     return this.inventoryService.getStock(
+      this.requireOrganization(organizationId),
+      variantId,
+    );
+  }
+
+  @Delete()
+  @ApiOperation({ summary: 'Delete/clear all stock records for the organization' })
+  deleteAllStock(
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    return this.inventoryService.deleteAllStock(
+      this.requireOrganization(organizationId),
+    );
+  }
+
+  @Delete(':variantId')
+  @ApiOperation({ summary: 'Delete/clear stock for a plant variant' })
+  @ApiParam({ name: 'variantId', type: Number, description: 'Plant variant ID', required: true })
+  deleteStock(
+    @Param('variantId', ParseIntPipe) variantId: number,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    return this.inventoryService.deleteStock(
       this.requireOrganization(organizationId),
       variantId,
     );
