@@ -80,92 +80,141 @@ export class InventoryService {
     );
   }
 
-  async getAllStock(organizationId: string) {
-    const stocks = await this.stockRepo.find({
-      where: { organizationId },
-      relations: ['variant', 'variant.plant', 'variant.plant.category', 'variant.plant.subcategory'],
-      order: { variantId: 'ASC' },
-    });
+   async getAllStock(
+     organizationId: string,
+     filters: {
+       category?: string;
+       subcategory?: string;
+       status?: string;
+       size?: string;
+       minPrice?: number;
+       maxPrice?: number;
+       minQuantity?: number;
+       maxQuantity?: number;
+     } = {}
+   ) {
+     // Build the base query with relations
+     const query = this.stockRepo.createQueryBuilder('stock')
+       .where('stock.organizationId = :organizationId', { organizationId })
+       .leftJoinAndSelect('stock.variant', 'variant')
+       .leftJoinAndSelect('variant.plant', 'plant')
+       .leftJoinAndSelect('plant.category', 'category')
+       .leftJoinAndSelect('plant.subcategory', 'subcategory')
+       .orderBy('variant.id', 'ASC');
 
-    if (stocks.length === 0) {
-      return stocks;
-    }
+     // Apply filters
+     if (filters.category) {
+       query.andWhere('category.name ILIKE :category', { category: `%${filters.category}%` });
+     }
+     
+     if (filters.subcategory) {
+       query.andWhere('subcategory.name ILIKE :subcategory', { subcategory: `%${filters.subcategory}%` });
+     }
+     
+     if (filters.size) {
+       query.andWhere('variant.size ILIKE :size', { size: `%${filters.size}%` });
+     }
+     
+     if (filters.minPrice !== undefined) {
+       query.andWhere('variant.price >= :minPrice', { minPrice: filters.minPrice });
+     }
+     
+     if (filters.maxPrice !== undefined) {
+       query.andWhere('variant.price <= :maxPrice', { maxPrice: filters.maxPrice });
+     }
+     
+     if (filters.minQuantity !== undefined) {
+       query.andWhere('stock.quantity >= :minQuantity', { minQuantity: filters.minQuantity });
+     }
+     
+     if (filters.maxQuantity !== undefined) {
+       query.andWhere('stock.quantity <= :maxQuantity', { maxQuantity: filters.maxQuantity });
+     }
+     
+     // Status filter (based on quantity)
+     if (filters.status) {
+       switch (filters.status.toLowerCase()) {
+         case 'in stock':
+           query.andWhere('stock.quantity > 5');
+           break;
+         case 'low stock':
+           query.andWhere('stock.quantity > 0 AND stock.quantity <= 5');
+           break;
+         case 'out of stock':
+           query.andWhere('stock.quantity <= 0');
+           break;
+         default:
+           // No filter for unknown status values
+           break;
+       }
+     }
 
-    const plantIds = Array.from(
-      new Set(
-        stocks
-          .map((stock) => stock.variant?.plant?.id)
-          .filter((plantId): plantId is number => Number.isInteger(plantId)),
-      ),
-    );
-    const variantIds = Array.from(
-      new Set(
-        stocks
-          .map((stock) => stock.variantId)
-          .filter((variantId): variantId is number =>
-            Number.isInteger(variantId),
-          ),
-      ),
-    );
+     // Execute query to get stocks with relations
+     const stocks = await query.getMany();
 
-    const qrQuery = this.qrRepo
-      .createQueryBuilder('qr')
-      .where('qr.organizationId = :organizationId', { organizationId });
+     if (stocks.length === 0) {
+       return stocks;
+     }
 
-    if (variantIds.length > 0 && plantIds.length > 0) {
-      qrQuery.andWhere(
-        new Brackets((qb) => {
-          qb.where('qr.variantId IN (:...variantIds)', { variantIds }).orWhere(
-            'qr.variantId IS NULL AND qr.plantId IN (:...plantIds)',
-            { plantIds },
-          );
-        }),
-      );
-    } else if (variantIds.length > 0) {
-      qrQuery.andWhere('qr.variantId IN (:...variantIds)', { variantIds });
-    } else if (plantIds.length > 0) {
-      qrQuery.andWhere('qr.variantId IS NULL AND qr.plantId IN (:...plantIds)', {
-        plantIds,
-      });
-    } else {
-      return stocks.map((stock) => ({
-        ...stock,
-        qrCode: this.buildInventoryQrCode(
-          null,
-          stock.variant?.plant?.id,
-          stock.variantId,
-        ),
-      }));
-    }
+     // Get QR codes for the stocks
+     const variantIds = stocks
+       .map((stock) => stock.variantId)
+       .filter((variantId): variantId is number => Number.isInteger(variantId));
+     
+     const plantIds = stocks
+       .map((stock) => stock.variant?.plant?.id)
+       .filter((plantId): plantId is number => Number.isInteger(plantId));
 
-    const qrCodes = await qrQuery.getMany();
-    const qrByVariantId = new Map<number, QrCode>();
-    const qrByPlantId = new Map<number, QrCode>();
+     const qrQuery = this.qrRepo
+       .createQueryBuilder('qr')
+       .where('qr.organizationId = :organizationId', { organizationId });
 
-    for (const qrCode of qrCodes) {
-      if (qrCode.variantId !== null) {
-        qrByVariantId.set(qrCode.variantId, qrCode);
-      } else {
-        qrByPlantId.set(qrCode.plantId, qrCode);
-      }
-    }
+     if (variantIds.length > 0 && plantIds.length > 0) {
+       qrQuery.andWhere(
+         new Brackets((qb) => {
+           qb.where('qr.variantId IN (:...variantIds)', { variantIds }).orWhere(
+             'qr.variantId IS NULL AND qr.plantId IN (:...plantIds)',
+             { plantIds },
+           );
+         }),
+       );
+     } else if (variantIds.length > 0) {
+       qrQuery.andWhere('qr.variantId IN (:...variantIds)', { variantIds });
+     } else if (plantIds.length > 0) {
+       qrQuery.andWhere('qr.variantId IS NULL AND qr.plantId IN (:...plantIds)', {
+         plantIds,
+       });
+     }
 
-    return stocks.map((stock) => {
-      const plantId = stock.variant?.plant?.id;
-      const variantQrCode = qrByVariantId.get(stock.variantId) ?? null;
-      const plantQrCode = plantId ? qrByPlantId.get(plantId) ?? null : null;
-      const selectedQrCode = variantQrCode ?? plantQrCode;
+     const qrCodes = await qrQuery.getMany();
+     const qrByVariantId = new Map<number, QrCode>();
+     const qrByPlantId = new Map<number, QrCode>();
 
-      return {
-        ...stock,
-        qrCode: this.buildInventoryQrCode(
-          selectedQrCode,
-          plantId,
-          stock.variantId,
-        ),
-      };
-    });
-  }
+     for (const qrCode of qrCodes) {
+       if (qrCode.variantId !== null) {
+         qrByVariantId.set(qrCode.variantId, qrCode);
+       } else {
+         qrByPlantId.set(qrCode.plantId, qrCode);
+       }
+     }
+
+     // Map stocks to response format with QR codes
+     return stocks.map((stock) => {
+       const plantId = stock.variant?.plant?.id;
+       const variantQrCode = qrByVariantId.get(stock.variantId) ?? null;
+       const plantQrCode = plantId ? qrByPlantId.get(plantId) ?? null : null;
+       const selectedQrCode = variantQrCode ?? plantQrCode;
+
+       return {
+         ...stock,
+         qrCode: this.buildInventoryQrCode(
+           selectedQrCode,
+           plantId,
+           stock.variantId,
+         ),
+       };
+     });
+   }
 
   async getStock(organizationId: string, variantId: number) {
     this.assertPositiveVariantId(variantId);

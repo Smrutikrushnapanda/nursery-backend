@@ -663,14 +663,20 @@ export class QrService {
 
     const results = {
       generated: [] as Array<{ plantId: number; code: string; qrImageBase64: string; alreadyGenerated: number }>,
-      skipped: [] as Array<{ plantId: number; reason: string; alreadyGenerated: number }>,
+      skipped: [] as Array<{ plantId: number; code: string; qrImageBase64: string; reason: string; alreadyGenerated: number }>,
     };
 
     for (const plant of plants) {
       // Check if QR already exists
       const existing = await this.qrRepo.findOne({ where: { plantId: plant.id } });
       if (existing) {
-        results.skipped.push({ plantId: plant.id, reason: 'QR code already exists', alreadyGenerated: 1 });
+        results.skipped.push({ 
+          plantId: plant.id, 
+          code: existing.code,
+          qrImageBase64: existing.qrImageBase64,
+          reason: 'QR code already exists', 
+          alreadyGenerated: 1 
+        });
         continue;
       }
 

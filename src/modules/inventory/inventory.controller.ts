@@ -96,14 +96,6 @@ export class InventoryController {
     );
   }
 
-  @Get()
-  @ApiOperation({ summary: 'Get all stock for the organization' })
-  getAllStock(@CurrentOrganization() organizationId?: string) {
-    return this.inventoryService.getAllStock(
-      this.requireOrganization(organizationId),
-    );
-  }
-
   @Get(':variantId')
   @ApiOperation({ summary: 'Get current stock by variant id' })
   getStock(
