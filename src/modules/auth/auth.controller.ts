@@ -27,24 +27,29 @@ import { LoginDto } from './dto/login.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { ThrottlerGuard } from '@nestjs/throttler';
 
 const COOKIE_OPTIONS = {
   httpOnly: false,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
-function setAuthCookies(res: Response, accessToken: string) {
+function setAuthCookies(res: Response, accessToken: string, rememberMe: boolean = false) {
+  // Set cookie expiration: 7 days for rememberMe, 24 hours otherwise
+  const maxAge = rememberMe ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+
   res.cookie('access_token', accessToken, {
     ...COOKIE_OPTIONS,
     httpOnly: true,
+    maxAge,
   });
   // NOT httpOnly so frontend can read - BUT it's now the actual JWT token!
   // Frontend must verify this token, not just check existence
   res.cookie('is_loggedin', accessToken, {
     ...COOKIE_OPTIONS,
     httpOnly: false, // Frontend can read this
+    maxAge,
   });
 }
 
@@ -112,16 +117,17 @@ export class AuthController {
     return result;
   }
 
-  @Post('login')
-  @ApiOperation({ summary: 'Login and get JWT' })
-  async login(
-    @Body() dto: LoginDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const result = await this.authService.login(dto);
-    setAuthCookies(res, result.accessToken);
-    return result;
-  }
+   @Post('login')
+   @UseGuards(ThrottlerGuard)
+   @ApiOperation({ summary: 'Login and get JWT' })
+   async login(
+     @Body() dto: LoginDto,
+     @Res({ passthrough: true }) res: Response,
+   ) {
+     const result = await this.authService.login(dto);
+     setAuthCookies(res, result.accessToken, dto.rememberMe);
+     return result;
+   }
 
   @Post('logout')
   @ApiOperation({ summary: 'Logout and clear auth cookies' })

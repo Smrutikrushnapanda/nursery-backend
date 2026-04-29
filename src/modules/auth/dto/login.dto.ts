@@ -5,6 +5,8 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  IsBoolean,
+  IsOptional,
 } from 'class-validator';
 
 export class LoginDto {
@@ -19,4 +21,9 @@ export class LoginDto {
   @IsNotEmpty()
   @MinLength(8)
   password!: string;
+
+  @ApiProperty({ example: false, description: 'If true, token expires in 7 days; if false or omitted, token expires in 24 hours' })
+  @IsOptional()
+  @IsBoolean()
+  rememberMe?: boolean = false;
 }

@@ -68,18 +68,23 @@ export class AuthService {
     const organization = await this.orgsService.findOne(user.organizationId);
     const { id, isActive, createdAt, updatedAt, ...organizationData } =
       organization;
-    return { ...this.signToken(user), organization: organizationData };
+    return {
+      ...this.signToken(user, dto.rememberMe),
+      organization: organizationData,
+    };
   }
 
-  private signToken(user: User) {
+  private signToken(user: User, rememberMe: boolean = false) {
     const payload = {
       sub: user.id,
       organizationId: user.organizationId,
       organization_id: user.organizationId,
       role: user.role,
     };
+    // Set expiration: 7 days if rememberMe is true, otherwise 24 hours
+    const expiresIn = rememberMe ? '7d' : '24h';
     return {
-      accessToken: this.jwtService.sign(payload),
+      accessToken: this.jwtService.sign(payload, { expiresIn }),
       organizationId: user.organizationId,
     };
   }
